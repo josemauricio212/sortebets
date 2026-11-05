@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SorteBets · Não é só sorte. Entenda o algoritmo.</title>
+<meta name="description" content="Simulação educativa do projeto Bets e Slots: o algoritmo por trás da perda. Fichas fictícias, nenhum dinheiro real.">
+<meta name="theme-color" content="#171411">
+<link rel="icon" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/icone.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sortibet777.vercel.app/">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="SorteBets · Não é só sorte. Entenda o algoritmo.">
+<meta property="og:description" content="Faça 5 pontos e vença a máquina. Depois veja o algoritmo que faz a casa sempre ganhar. Fichas fictícias, nenhum dinheiro real.">
+<meta property="og:image" content="https://sortibet777.vercel.app/img/capa.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" as="font" type="font/woff2" href="fonts/dejavu-serif-cond-bi.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="fonts/lato-400.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="fonts/lato-900.woff2" crossorigin>
+<link rel="stylesheet" href="css/estilo.css">
+</head>
+<body data-aba="cadastro">
+
+<!-- Símbolos dos rolos (desenhados uma vez, usados com <use>) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="s-dado" viewBox="0 0 100 100"><g stroke="#171411" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M50 14 84 32 50 50 16 32Z" fill="#C69A43"/><path d="M16 32 50 50V88L16 70Z" fill="#F3E8D2"/><path d="M84 32 50 50V88L84 70Z" fill="#F3E8D2"/></g>
+      <g fill="#171411"><circle cx="50" cy="32" r="5.5"/><circle cx="26" cy="49" r="5"/><circle cx="40" cy="70" r="5"/><circle cx="74" cy="49" r="5"/><circle cx="67" cy="62" r="5"/><circle cx="60" cy="75" r="5"/></g></symbol>
+    <symbol id="s-sete" viewBox="0 0 100 100"><path d="M24 18H80V32L52 86H32L60 34H24Z" fill="#B83832" stroke="#171411" stroke-width="6" stroke-linejoin="round"/></symbol>
+    <symbol id="s-ficha" viewBox="0 0 100 100"><g stroke="#171411" stroke-width="6"><circle cx="50" cy="50" r="38" fill="#171411"/><circle cx="50" cy="50" r="24" fill="#F3E8D2"/></g>
+      <g fill="#C69A43"><rect x="45" y="15" width="10" height="11" rx="2"/><rect x="45" y="74" width="10" height="11" rx="2"/><rect x="15" y="45" width="11" height="10" rx="2"/><rect x="74" y="45" width="11" height="10" rx="2"/></g>
+      <path d="M50 36 64 50 50 64 36 50Z" fill="#B83832" stroke="#171411" stroke-width="4" stroke-linejoin="round"/></symbol>
+    <symbol id="s-sino" viewBox="0 0 100 100"><g stroke="#171411" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M50 16C34 16 28 30 28 46V62L18 74H82L72 62V46C72 30 66 16 50 16Z" fill="#C69A43"/><circle cx="50" cy="82" r="7" fill="#171411"/><path d="M50 16V10" fill="none"/></g></symbol>
+    <symbol id="s-cereja" viewBox="0 0 100 100"><g stroke="#171411" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M32 62C38 40 48 24 62 14M68 62C66 44 64 28 62 14" fill="none"/><path d="M62 14C72 10 82 14 86 22C76 26 66 24 62 14Z" fill="#C69A43"/>
+      <circle cx="30" cy="70" r="15" fill="#B83832"/><circle cx="68" cy="70" r="15" fill="#B83832"/></g></symbol>
+    <symbol id="s-copas" viewBox="0 0 100 100"><path d="M50 86C30 70 14 56 14 38 14 26 23 17 34 17 42 17 47 21 50 28 53 21 58 17 66 17 77 17 86 26 86 38 86 56 70 70 50 86Z" fill="#B83832" stroke="#171411" stroke-width="6" stroke-linejoin="round"/></symbol>
+    <symbol id="s-vazio" viewBox="0 0 100 100"><path d="M50 44 56 50 50 56 44 50Z" fill="#17141133"/></symbol>
+    <symbol id="i-som" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-recomecar" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<a class="pular" href="#conteudo">Pular para o conteúdo</a>
+
+<header class="topbar">
+  <div class="bar">
+    <div class="marca">
+      <img src="img/icone.png" alt="" width="44" height="44">
+      <div><b>SorteBets</b><small>Simulação educativa</small></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Seções do site">
+      <button class="tab" role="tab" id="t-cadastro" aria-controls="p-cadastro" aria-selected="true" type="button">Cadastro</button>
+      <button class="tab locked" role="tab" id="t-jogar" aria-controls="p-jogar" aria-selected="false" type="button">Jogar</button>
+      <button class="tab" role="tab" id="t-algo" aria-controls="p-algo" aria-selected="false" type="button">Algoritmo</button>
+      <button class="tab" role="tab" id="t-placar" aria-controls="p-placar" aria-selected="false" type="button">Placar</button>
+    </nav>
+    <div class="conta" id="conta" hidden>
+      <span class="nome" id="jogador"></span>
+      <span class="chip" title="Fichas fictícias"><i class="ficha" aria-hidden="true"></i><b id="saldo">200</b></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="conteudo">
+
+  <!-- ===================== CADASTRO ===================== -->
+  <section class="painel" id="p-cadastro" role="tabpanel" aria-labelledby="t-cadastro">
+    <div class="hero">
+      <div class="hero-txt">
+        <img class="logo-grande" src="img/logo.webp" alt="SorteBets" width="640" height="640">
+        <span class="selo">Bônus de boas-vindas</span>
+        <h1>Ganhe <em>200 fichas</em> grátis</h1>
+        <p>Crie sua conta em 10 segundos e comece a girar. Faça 5 pontos e vença a máquina!</p>
+        <ul class="vantagens">
+          <li>Cadastro rápido, só o seu nome</li>
+          <li>Bônus liberado na hora</li>
+          <li>Três símbolos iguais valem 1 ponto</li>
+        </ul>
+      </div>
+      <div class="hero-lado">
+        <form class="card form" id="cadastro" aria-label="Cadastro do jogador" novalidate>
+          <h2>Criar conta</h2>
+          <p class="sub">Preencha para liberar o jogo.</p>
+          <p class="alerta" id="alerta" role="alert" hidden>Faça o cadastro para liberar a aba Jogar.</p>
+          <div class="campo">
+            <label for="nome">Nome</label>
+            <input id="nome" name="nome" type="text" autocomplete="name" required maxlength="40" placeholder="Seu nome">
+          </div>
+          <button class="cta" type="submit">Cadastrar e jogar</button>
+          <p class="aviso"><b>Você está usando fichas fictícias.</b> Nenhum dinheiro real. Seus dados não são salvos nem enviados para lugar nenhum.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== JOGAR ===================== -->
+  <section class="painel" id="p-jogar" role="tabpanel" aria-labelledby="t-jogar" hidden>
+    <div class="jogo">
+      <div class="coluna">
+        <div class="letreiro" aria-hidden="true"><small>A máquina diz</small><p class="balao" id="balao">Bora! O primeiro giro é o mais gostoso.</p></div>
+        <div class="card meta" aria-label="Pontos para vencer">
+          <div class="meta-top"><small>Desafio: 5 pontos</small><b id="ptsTxt">0 / 5 pontos</b></div>
+          <div class="pips" id="pips"></div>
+        </div>
+
+        <div class="machine" id="maquina">
+          <div class="coroa"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#s-dado"/></svg><b>SorteBets</b></div>
+          <div class="hud">
+            <div><small>Fichas</small><b id="fichas">200</b></div>
+            <div><small>Rodadas</small><b id="rodadas">0</b></div>
+            <div><small>Por giro</small><b>10</b></div>
+          </div>
+          <div class="reels" id="reels" role="img" aria-label="Rolos do caça-níquel">
+            <div class="reel"><div class="strip" id="r0"></div></div>
+            <div class="reel"><div class="strip" id="r1"></div></div>
+            <div class="reel"><div class="strip" id="r2"></div></div>
+            <span class="payline" aria-hidden="true"></span>
+          </div>
+          <div class="msg" id="msg" aria-live="polite">Gire e junte 5 pontos!</div>
+          <div class="controles">
+            <button class="cta" id="girar" type="button">GIRAR</button>
+            <div class="botoes-som">
+              <button class="som" id="som" type="button" aria-pressed="true" aria-label="Efeitos sonoros" title="Desligar os efeitos"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-som"/></svg></button>
+              <button class="som nota" id="musica" type="button" aria-pressed="true" aria-label="Música" title="Desligar a música"><span aria-hidden="true">♫</span></button>
+            </div>
+          </div>
+          <p class="rodape-maq">Fichas fictícias. Nenhum dinheiro real.<span class="dica-tecla"> <kbd>Espaço</kbd> também gira.</span></p>
+        </div>
+
+        <div class="card fim" id="fim" hidden>
+          <h2 class="placa">Acabaram as fichas</h2>
+          <p id="fimTxt"></p>
+          <p class="pergunta">O que fez você acreditar que venceria?</p>
+          <button class="cta" id="verAlgo" type="button">Ver como o algoritmo funciona</button>
+          <button class="btn novo" id="novoJogador" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recomecar"/></svg>Próximo jogador</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ALGORITMO ===================== -->
+  <section class="painel" id="p-algo" role="tabpanel" aria-labelledby="t-algo" hidden>
+    <div class="algo">
+      <div class="algo-topo">
+        <div>
+          <span class="selo">Por trás da máquina</span>
+          <h2>Por que ninguém chega a 5</h2>
+          <p class="quem" id="quem">Ninguém jogou ainda. Faça o cadastro e jogue para ver seus números aqui.</p>
+        </div>
+        <blockquote class="citacao">É só um jogo... mas a máquina sabe mais do que você.</blockquote>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><small>Rodadas jogadas</small><b id="sRod">0</b></div>
+        <div class="stat"><small>Rodadas presas no 4</small><b id="sPreso">0</b></div>
+        <div class="stat"><small>"Faltou só um" fabricados</small><b id="sNear">0</b></div>
+        <div class="stat"><small>Pontos tirados</small><b id="sRecuo">0</b></div>
+        <div class="stat"><small>Fichas gastas</small><b id="sGasto">0</b></div>
+      </div>
+
+      <div class="chances">
+        <div class="chance zero"><small>Sua chance real de fazer o 5º ponto</small><b>0%</b><span>Em 4 pontos, o diretor bloqueia o trio. Sempre.</span></div>
+        <div class="chance"><small>Chance de trio no acaso puro, por giro</small><b id="pAcaso">0,38%</b><span>Com os mesmos rolos, sem o diretor.</span></div>
+        <div class="chance"><small>Chance que a máquina te deu no começo</small><b id="pIsca">50%</b><span id="pIscaTxt">Cerca de 130 vezes o acaso. É a isca.</span></div>
+      </div>
+
+      <div class="card">
+        <h3>Seus pontos, giro a giro</h3>
+        <canvas id="grafico" aria-label="Gráfico dos pontos ao longo das rodadas"></canvas>
+        <ul class="legenda">
+          <li><i class="lg-linha"></i>Seus pontos</li>
+          <li><i class="lg-meta"></i>Meta de 5 (bloqueada)</li>
+          <li><i class="lg-quase"></i>"Faltou só um"</li>
+          <li><i class="lg-recuo"></i>Ponto tirado</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Registro do diretor</h3>
+        <p class="sub">Cada giro foi decidido no clique, antes de os rolos girarem. Aqui está a decisão e o motivo.</p>
+        <div class="log-wrap" id="logWrap">
+          <table class="log">
+            <thead><tr><th>Giro</th><th>Fase</th><th>Resultado na linha</th><th>Regra aplicada</th><th>Chance real</th></tr></thead>
+            <tbody id="logLista"></tbody>
+          </table>
+        </div>
+        <p class="vazio-log" id="logVazio">Ainda não há giros registrados.</p>
+        <p class="semente">Semente do gerador desta partida: <code id="semente">—</code></p>
+      </div>
+
+      <h3 class="titulo-sec">As duas camadas da máquina</h3>
+      <div class="camadas">
+        <div class="card camada">
+          <span class="num">1</span>
+          <h4>O acaso, já viciado</h4>
+          <p>Um gerador de números (<code>xoshiro128**</code>) sorteia onde cada rolo para. Cada rolo tem 22 posições, mas elas não pesam igual: o rolo virtual tem 64 casas.</p>
+          <div class="pesos" id="pesos"></div>
+          <p class="nota">O dado aparece no rolo, mas ocupa 1 casa em 64. Os vazios colados nele ocupam até 7. Por isso ele vive passando raspando.</p>
+        </div>
+        <div class="card camada">
+          <span class="num">2</span>
+          <h4>O diretor, que decide antes</h4>
+          <p>Antes da animação, o diretor olha seus pontos e escolhe o resultado. Depois procura nos rolos uma parada real que mostre exatamente isso.</p>
+          <table class="cfg" id="cfg"></table>
+        </div>
+      </div>
+
+      <ol class="truques">
+        <li><strong>Começo fácil.</strong> No primeiro ponto, 1 em cada 2 giros paga. No acaso puro seria menos de 1 em 250. A chance vai caindo a cada ponto (50%, 40%, 30%, 25%) para parecer que ficou difícil por mérito seu.</li>
+        <li><strong>Seca máxima.</strong> Abaixo de 4, a máquina nunca deixa você passar mais de 3 giros sem ponto: o 4º é garantido. Assim ninguém desanima antes de chegar na trava. Resultado: todo mundo chega a 4.</li>
+        <li><strong>Trava no 4.</strong> Em 4 pontos, a chance do último trio vira <code>0%</code>. Não importa quantas fichas você tenha.</li>
+        <li><strong>"Faltou só um" fabricado.</strong> Travado no 4, a maioria dos giros põe dois símbolos na linha e o terceiro parado logo acima ou abaixo. O último rolo gira mais devagar para criar suspense.</li>
+        <li><strong>Vai e volta.</strong> Depois de 2 giros no 4 (para o "falta um" bater), de vez em quando a máquina tira um ponto. E logo devolve: 60% de chance no giro seguinte. Cair para 3 e voltar para 4 renova a esperança e mantém você jogando.</li>
+        <li><strong>Tudo decidido no clique.</strong> O resultado sai de <code>Motor.decidir()</code> antes de os rolos girarem. A animação só obedece.</li>
+        <li><strong>Sons que comemoram.</strong> A máquina toca fanfarra, moedas e prato no ponto, e faz festa até no "quase". Quando você perde, quase não faz barulho. E quando você chega no 4, a música acelera e ganha trompete. Perder fica silencioso; quase ganhar parece ganhar.</li>
+        <li><strong>Cadastro com bônus.</strong> Você entregou seu nome em troca de "fichas grátis". Os sites de aposta fazem igual, pedindo ainda e-mail, CPF e telefone: o bônus é a isca e seus dados viram propaganda para você voltar.</li>
+      </ol>
+
+      <div class="card mc">
+        <h3>Teste com mil jogadores</h3>
+        <p class="sub">O computador joga 1.000 partidas completas (200 fichas cada) nas duas versões da máquina e compara.</p>
+        <div class="mc-acoes">
+          <label for="mcN">Jogadores</label>
+          <select id="mcN"><option value="1000">1.000</option><option value="10000">10.000</option><option value="100000">100.000</option></select>
+          <button class="cta pequeno" id="mcRodar" type="button">Rodar simulação</button>
+        </div>
+        <div id="mcRes" hidden>
+          <canvas id="mcGraf" aria-label="Gráfico da distribuição de pontos máximos nas duas máquinas"></canvas>
+          <ul class="legenda"><li><i class="lg-dir"></i>SorteBets (com diretor)</li><li><i class="lg-aca"></i>Acaso puro (mesmos rolos)</li></ul>
+          <div class="mc-num" id="mcNum"></div>
+        </div>
+      </div>
+
+      <details class="card codigo">
+        <summary>Ver o código do diretor</summary>
+<pre><code>function decidir(rng, partida) {
+  const travado = partida.pontos &gt;= META - 1;     // 4 pontos?
+  const sorteio = rng.real();                       // número entre 0 e 1
+
+  let chance = [0.50, 0.40, 0.30, 0.25][partida.pontos]; // ISCA que esfria
+  if (partida.seca &gt;= 3) chance = 1;              // SECA MÁXIMA: ponto garantido
+  if (partida.recuou)    chance = 0.60;             // DEVOLUÇÃO do ponto tirado
+  if (travado)           chance = 0;                // TRAVA: o 5º nunca vem
+
+  if (sorteio &lt; chance) return ponto();            // libera o trio
+
+  if (travado &amp;&amp; partida.giros_no_4 &gt;= 2 &amp;&amp; sorteio &lt; 0.12)
+    return tirarUmPonto();                          // VAI E VOLTA
+
+  if (sorteio &lt; (travado ? 0.78 : ...))            // QUASE FABRICADO
+    return doisNaLinha_terceiroRaspando();
+
+  return derrota();
+}</code></pre>
+        <p class="nota">Código completo em <code>js/motor.js</code>, com comentários.</p>
+      </details>
+
+      <div class="card debate">
+        <h3>Para conversar</h3>
+        <ul>
+          <li>Em que momento você achou que ia ganhar?</li>
+          <li>Se fosse dinheiro de verdade, você teria recarregado?</li>
+          <li>Por que a máquina deixa a gente ganhar no começo?</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PLACAR ===================== -->
+  <section class="painel" id="p-placar" role="tabpanel" aria-labelledby="t-placar" hidden>
+    <div class="placar">
+      <div>
+        <span class="selo">Placar da turma</span>
+        <h2>Quem venceu a máquina?</h2>
+      </div>
+      <p class="resumo"><span class="par">Jogadores: <b id="nJog">0</b></span> <span class="sep" aria-hidden="true">|</span> <span class="par">Venceram: <b class="venc" id="nVenc">0</b></span></p>
+      <div class="tabela-wrap" id="tabela">
+        <table class="tabela">
+          <thead>
+            <tr><th>#</th><th>Nome</th><th>Pontos máx.</th><th>Rodadas</th><th>Presas no 4</th><th>"Faltou só um"</th><th>Fichas gastas</th></tr>
+          </thead>
+          <tbody id="lista"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio">Ninguém jogou ainda.</p>
+      <div class="placar-acoes">
+        <button class="btn" id="limpar" type="button">Limpar placar</button>
+      </div>
+      <div class="confirma" id="confirma" role="alertdialog" aria-labelledby="confirmaTxt" hidden>
+        <p id="confirmaTxt"></p>
+        <div>
+          <button class="btn perigo" id="simLimpar" type="button">Sim, limpar placar</button>
+          <button class="btn" id="naoLimpar" type="button">Cancelar</button>
+        </div>
+      </div>
+      <p class="nota">O placar fica salvo só neste navegador, sem conta e sem internet.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer><span class="lema">Não é só sorte. Entenda o algoritmo.</span><p>Decisões conscientes hoje, um futuro mais seguro amanhã.</p><small>Projeto de extensão "Bets e Slots: o algoritmo por trás da perda" · Simulação educativa com fichas fictícias</small></footer>
+
+<script src="js/motor.js" defer></script>
+<script src="js/som.js" defer></script>
+<script src="js/script.js" defer></script>
+</body>
+</html>

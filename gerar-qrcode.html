@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SorteBets · QR code</title>
+<link rel="icon" href="img/favicon.png">
+<link rel="stylesheet" href="css/estilo.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="bar">
+    <div class="marca"><img src="img/icone.png" alt="" width="44" height="44"><div><b>SorteBets</b><small>Simulação educativa</small></div></div>
+    <a class="btn" href="sortibet.html">← Voltar ao jogo</a>
+  </div>
+</header>
+
+<main class="wrap gerador">
+  <div>
+    <span class="selo">QR code de acesso</span>
+    <h2>Cartaz com QR code</h2>
+    <p class="sub">Cole o link público do jogo. O QR code é gerado aqui mesmo, sem enviar nada para a internet.</p>
+  </div>
+
+  <form class="card form" id="form">
+    <div class="campo">
+      <label for="url">Link público do jogo</label>
+      <input id="url" type="url" required placeholder="https://..." autocomplete="off" spellcheck="false">
+    </div>
+    <p class="alerta" id="erro" hidden></p>
+    <button class="cta" type="submit">GERAR QR CODE</button>
+  </form>
+
+  <div class="saidas" id="saidas" hidden>
+    <figure class="card">
+      <canvas id="cImp" class="prev"></canvas>
+      <figcaption>
+        <b>Para imprimir</b> · folha A4 em pé (2480 × 3508 px, 300 dpi)
+        <a class="btn" id="dImp" download="sortibet-qrcode-impressao.png">Baixar PNG</a>
+      </figcaption>
+    </figure>
+    <figure class="card">
+      <canvas id="cSlide" class="prev"></canvas>
+      <figcaption>
+        <b>Para slide</b> · 16:9 (1920 × 1080 px)
+        <a class="btn" id="dSlide" download="sortibet-qrcode-slide.png">Baixar PNG</a>
+      </figcaption>
+    </figure>
+  </div>
+  <p class="nota" id="dica" hidden>Antes de imprimir, teste: aponte a câmera do celular para a imagem na tela e veja se o jogo abre.</p>
+</main>
+
+<script src="js/qrcode.js"></script>
+<script src="js/logo-dados.js"></script>
+<script src="js/gerar-qrcode.js"></script>
+</body>
+</html>

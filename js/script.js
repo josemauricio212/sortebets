@@ -1,0 +1,411 @@
+/* =====================================================================
+   SORTEBETS · Interface (script.js)
+   A tela só mostra o que o motor (js/motor.js) decidiu.
+   ===================================================================== */
+"use strict";
+const M = window.Motor, C = M.CONFIG, META = C.meta;
+const $ = (id) => document.getElementById(id);
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduzMov = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const pct = (x, casas = 0) => (x * 100).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }) + "%";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const svgSim = (s) => `<svg viewBox="0 0 100 100" role="img" aria-label="${M.NOMES[s]}"><use href="#s-${s}"/></svg>`;
+const sorteioUI = M.criarRNG(); // só para falas e enfeites; nunca decide resultado
+const falar = (lista) => (Array.isArray(lista) ? sorteioUI.escolher(lista) : lista);
+
+let st, cadastrado = false;
+function novo() {
+  st = { pts: 0, memoria: M.novoEstado(), fichas: C.fichasIniciais, rodadas: 0, preso: 0, near: 0, recuos: 0, gasto: 0,
+    hist: [0], log: [], girando: false, rng: M.criarRNG() };
+}
+
+/* ---------------------------------------------------------------
+   Letreiro "A máquina diz": a voz da máquina, sem personagem
+   (Manual de Marca: o dado é estático, sem rosto e sem animação)
+   --------------------------------------------------------------- */
+// Tom do letreiro conforme o giro: ponto, quase, recuo, derrota, fim
+function reagir(tom) { const l = document.querySelector(".letreiro"); if (l) l.dataset.tom = tom || ""; }
+function balao(txt) {
+  const b = $("balao"); b.textContent = txt;
+  b.classList.remove("pop"); b.offsetWidth; b.classList.add("pop");
+}
+const FALAS = {
+  pontoIsca: ["Isso! Você leva jeito!", "Tá vendo? É fácil!", "Olha você subindo!", "Mais um! A máquina tá generosa!"],
+  chegou4: "Falta UM! Não vai parar agora, né?",
+  quaseTrava: ["Passou raspando! O próximo vem!", "Foi por um fio! Tá esquentando!", "Quase! Ela tá quase pagando!", "Ahh! Mais um giro e sai!"],
+  quaseIsca: ["Uh, quase!", "Por pouco!"],
+  recuo: ["Ih, azar! Você recupera rapidinho.", "Calma, foi só um pontinho."],
+  derrotaTrava: ["Calma, a sorte vira.", "Só mais um giro.", "Já já sai, confia!", "Você já investiu tanto... continua!"],
+  derrotaIsca: ["Gira de novo!", "Faz parte!", "Próximo!"],
+  suspense: "Vai... vai... VAI!",
+  fim: "Acabou? Num site de verdade, agora aparecia o botão de depósito.",
+};
+
+/* ---------------------------------------------------------------
+   Som: música e efeitos ficam em js/som.js
+   --------------------------------------------------------------- */
+const S = window.Som;
+const podeTocarMusica = () => cadastrado && st.fichas >= C.custo && document.body.dataset.aba === "jogar" && !document.hidden;
+function musicaConformeTela() { if (podeTocarMusica()) S.tocarMusica(); else S.pararMusica(); }
+
+/* ---------------------------------------------------------------
+   Rolos: cada rolo mostra 3 posições reais da fita (acima, linha, abaixo)
+   --------------------------------------------------------------- */
+const pos = [0, 1, 2].map((r) => sorteioUI.inteiro(M.N));
+const itens = (r, ini, qtd) => Array.from({ length: qtd }, (_, i) => `<div>${svgSim(M.simbolo(r, ini + i))}</div>`).join("");
+const altCel = () => $("r0").parentElement.clientHeight / 3;
+function mostrarParado(r) {
+  const s = $("r" + r);
+  s.style.transition = "none"; s.style.transform = "translateY(0)";
+  s.innerHTML = itens(r, pos[r] - 1, 3);
+}
+// Gira "para baixo" e para exatamente na parada escolhida pelo motor
+function girarRolo(r, alvo, voltas, ms) {
+  const s = $("r" + r), h = altCel();
+  const m = voltas * M.N + ((((pos[r] - alvo) % M.N) + M.N) % M.N);
+  s.style.transition = "none";
+  s.innerHTML = itens(r, alvo - 1, m + 3);
+  s.style.transform = `translateY(${-m * h}px)`;
+  s.offsetHeight;
+  s.style.transition = `transform ${ms}ms cubic-bezier(.18,.82,.3,1.04)`;
+  s.style.transform = "translateY(0)";
+  return esperar(ms).then(() => { pos[r] = alvo; mostrarParado(r); S.parada(r); });
+}
+
+function setMsg(t, c) { $("msg").textContent = t; $("msg").className = "msg " + (c || ""); }
+
+/* ---------------------------------------------------------------
+   Giro
+   --------------------------------------------------------------- */
+async function girar() {
+  if (!cadastrado || st.girando) return;
+  if (st.fichas < C.custo) { fimDeJogo(); return; }
+  st.girando = true;
+  st.fichas -= C.custo; st.gasto += C.custo; st.rodadas++;
+  if (st.pts === META - 1) st.preso++;
+  atualizar();
+
+  // 1) O motor decide TUDO aqui, antes da animação.
+  const d = M.decidir(st.rng, st.memoria);
+  const travado = d.fase === "TRAVA";
+
+  // 2) Espetáculo.
+  S.iniciar(); S.tocarMusica(); S.moeda();
+  setMsg("Girando...");
+  $("reels").classList.remove("trio"); $("maquina").classList.remove("ganhou");
+  const l = M.linha(d.paradas);
+  const doisIguais = l[0] !== M.VAZIO && l[0] === l[1];
+  const rapido = reduzMov();
+  const ms = rapido ? [150, 150, 150] : [1050, 1450, doisIguais ? 3300 : 1850];
+  const promessas = d.paradas.map((p, r) => girarRolo(r, p, 2 + r, ms[r]));
+  S.giro(doisIguais ? ms[1] : ms[2]);
+  if (doisIguais && !rapido) {
+    promessas[1].then(() => { $("r2").parentElement.classList.add("suspense"); balao(FALAS.suspense); S.suspense(ms[2] - ms[1]); });
+  }
+  await Promise.all(promessas);
+  $("r2").parentElement.classList.remove("suspense");
+
+  // 3) Aplicar o que já estava decidido.
+  st.memoria = M.aplicar(st.memoria, d);
+  st.pts = st.memoria.pontos;
+  if (d.tipo === "ponto") {
+    $("reels").classList.add("trio"); $("maquina").classList.add("ganhou");
+    S.abaixar(2200); S.ponto(st.pts === META - 1); S.intensidade(st.pts === META - 1);
+    setMsg(st.pts === META - 1 ? "+1 ponto! FALTA SÓ 1 PRA VENCER!" : `+1 ponto! Faltam ${META - st.pts}.`, "win");
+    balao(st.pts === META - 1 ? FALAS.chegou4 : falar(FALAS.pontoIsca));
+    reagir("ponto");
+  } else if (d.tipo === "quase") {
+    st.near++; S.quase(travado);
+    setMsg(travado ? "NÃÃÃO! Passou raspando! Falta só 1!" : "Quase! Faltou um símbolo.", "near");
+    balao(falar(travado ? FALAS.quaseTrava : FALAS.quaseIsca)); reagir("quase");
+  } else if (d.tipo === "recuo") {
+    st.recuos++; S.recuo(); S.intensidade(false);
+    setMsg("Azar! A máquina tirou 1 ponto.", "bad"); balao(falar(FALAS.recuo)); reagir("recuo");
+  } else {
+    S.derrota(); setMsg("Não foi dessa vez.", "lose"); balao(falar(travado ? FALAS.derrotaTrava : FALAS.derrotaIsca));
+    reagir("derrota");
+  }
+  st.hist.push(st.pts);
+  st.log.push({ n: st.rodadas, fase: d.fase, tipo: d.tipo, regra: d.regra, chance: d.chanceUsada, linha: l, pts: st.pts });
+  st.girando = false;
+  atualizar(); registrar();
+  if (st.fichas < C.custo) fimDeJogo();
+}
+
+function fimDeJogo() {
+  setMsg("Acabaram suas fichas. Fim de jogo.", "bad");
+  balao(FALAS.fim); reagir("fim");
+  S.intensidade(false); S.pararMusica(); S.fim();
+  const chegou = Math.max(...st.hist) >= META - 1;
+  $("fimTxt").textContent = chegou
+    ? `Você girou ${st.rodadas} vezes, passou ${st.preso} rodadas preso no 4 e viu ${st.near} vezes o "faltou só um".`
+    : `Você girou ${st.rodadas} vezes e chegou a ${Math.max(...st.hist)} pontos.`;
+  $("fim").hidden = false;
+  atualizar();
+}
+
+/* ---------------------------------------------------------------
+   Atualizar tela
+   --------------------------------------------------------------- */
+function atualizar() {
+  $("fichas").textContent = st.fichas; $("saldo").textContent = st.fichas; $("rodadas").textContent = st.rodadas;
+  $("ptsTxt").textContent = `${st.pts} / ${META} pontos`;
+  $("pips").innerHTML = Array.from({ length: META }, (_, i) => {
+    const c = i < st.pts ? "on" : i === META - 1 ? "last" + (st.pts === META - 1 ? " pulse" : "") : "";
+    return `<div class="pip ${c}">${i + 1}</div>`;
+  }).join("");
+  const semFichas = st.fichas < C.custo;
+  $("girar").disabled = st.girando || semFichas;
+  $("girar").textContent = semFichas && !st.girando ? "SEM FICHAS" : "GIRAR";
+  $("sRod").textContent = st.rodadas; $("sPreso").textContent = st.preso; $("sNear").textContent = st.near;
+  $("sRecuo").textContent = st.recuos; $("sGasto").textContent = st.gasto;
+  if (!$("p-algo").hidden) { desenhar(); mostrarLog(); }
+}
+
+/* ---------------------------------------------------------------
+   Aba Algoritmo
+   --------------------------------------------------------------- */
+const COR = { preto: "#171411", vermelho: "#B83832", creme: "#F3E8D2", cremeCl: "#FDF8EE", ocre: "#C69A43", suave: "#5A4F42", linha: "#17141126" };
+const FONTE = '12px "DejaVu Sans Mono", Consolas, monospace';
+function prepararCanvas(c) {
+  const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  return [g, w, h];
+}
+function desenhar() {
+  const [g, w, h] = prepararCanvas($("grafico"));
+  const L = 30, R = 14, T = 16, B = 24, H = st.hist, n = Math.max(H.length - 1, 1);
+  const x = (i) => L + ((w - L - R) * i) / n, y = (v) => h - B - ((h - T - B) * v) / META;
+  // faixa da trava (4 a 5)
+  g.fillStyle = "#B8383214"; g.fillRect(L, y(META), w - L - R, y(META - 1) - y(META));
+  g.font = FONTE; g.lineWidth = 1;
+  for (let v = 0; v <= META; v++) {
+    g.strokeStyle = COR.linha; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(w - R, y(v)); g.stroke();
+    g.fillStyle = COR.suave; g.fillText(v, 10, y(v) + 4);
+  }
+  g.fillStyle = COR.suave; g.fillText("giros →", w - R - 56, h - 6);
+  g.strokeStyle = COR.vermelho; g.setLineDash([7, 5]); g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(L, y(META)); g.lineTo(w - R, y(META)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = COR.vermelho; g.font = '900 12px Lato, Arial'; g.fillText("meta", w - R - 36, y(META) - 6);
+  g.fillText("zona da trava", L + 6, y(META - 1) - 6);
+  g.beginPath(); H.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))));
+  g.strokeStyle = COR.preto; g.lineWidth = 3; g.lineJoin = "round"; g.stroke();
+  st.log.forEach((e) => {
+    const cx = x(e.n), cy = y(e.pts);
+    if (e.tipo === "quase") { g.beginPath(); g.arc(cx, cy, 5, 0, 7); g.fillStyle = COR.ocre; g.fill(); g.lineWidth = 2; g.strokeStyle = COR.preto; g.stroke(); }
+    if (e.tipo === "recuo") { g.beginPath(); g.moveTo(cx - 6, cy - 14); g.lineTo(cx + 6, cy - 14); g.lineTo(cx, cy - 4); g.closePath(); g.fillStyle = COR.vermelho; g.fill(); }
+  });
+  g.beginPath(); g.arc(x(H.length - 1), y(H.at(-1)), 5, 0, 7); g.fillStyle = COR.preto; g.fill();
+}
+function mostrarLog() {
+  const vazio = !st.log.length;
+  $("logWrap").hidden = vazio; $("logVazio").hidden = !vazio;
+  $("semente").textContent = st.rng ? "0x" + st.rng.semente.toString(16).toUpperCase().padStart(8, "0") : "—";
+  $("logLista").innerHTML = st.log.slice().reverse().map((e) => `<tr class="${e.tipo}">
+    <td>${e.n}</td><td><span class="fase ${e.fase}">${e.fase}</span></td>
+    <td><span class="mini">${e.linha.map(svgSim).join("")}</span></td>
+    <td>${esc(e.regra)}</td><td>${pct(e.chance)}</td></tr>`).join("");
+}
+function montarExplicacao() {
+  const pa = M.chanceTrioQualquer();
+  $("pAcaso").textContent = pct(pa, 2);
+  $("pIsca").textContent = pct(C.chanceIsca[0]);
+  $("pIscaTxt").textContent = `Cerca de ${Math.round(C.chanceIsca[0] / pa)} vezes o acaso. É a isca.`;
+  // Pesos do rolo 3 (rolo virtual)
+  const R = M.ROLOS[2], soma = {};
+  R.fitas.forEach((s, i) => (soma[s] = (soma[s] || 0) + R.pesos[i]));
+  let colado = 0; R.fitas.forEach((s, i) => { if (s === M.VAZIO && (M.simbolo(2, i - 1) === "dado" || M.simbolo(2, i + 1) === "dado")) colado += R.pesos[i]; });
+  const linhas = M.SIMBOLOS.map((s) => [svgSim(s), soma[s], M.NOMES[s]]);
+  linhas.push([svgSim("vazio"), colado, "Vazios colados no dado"]);
+  $("pesos").innerHTML = `<small><b>Rolo 3:</b> casas de cada símbolo, em 64</small>` + linhas.map(([ic, p, nome]) =>
+    `<div class="peso" title="${nome}">${ic}<span class="barra"><i style="width:${(p / 13) * 100}%"></i></span><b>${p}/64</b></div>`).join("");
+  $("cfg").innerHTML = [
+    ["Chance de ponto com 0, 1, 2 e 3 pontos", C.chanceIsca.map((x) => pct(x)).join(" · ")],
+    [`Ponto garantido depois de ${C.secaMaxima} giros sem ponto`, "100%"],
+    ["Chance do 5º ponto (em 4)", pct(C.chanceTrava)],
+    [`Chance de tirar 1 ponto (em 4, após ${C.carenciaTrava} giros)`, pct(C.chanceRecuo)],
+    ["Chance de devolver o ponto tirado", pct(C.chanceDevolver)],
+    ['"Faltou só um" em 4 (do que sobra)', pct(C.chanceQuaseTravado)],
+    ['"Quase" abaixo de 4 (do que sobra)', pct(C.chanceQuaseIsca)],
+    ["Fichas iniciais / custo do giro", `${C.fichasIniciais} / ${C.custo}`],
+  ].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+}
+
+/* Simulação de Monte Carlo em partes, para não travar a tela */
+let mcDados = null;
+async function rodarMC() {
+  const n = +$("mcN").value, btn = $("mcRodar"), semente = M.novaSemente();
+  btn.disabled = true;
+  const res = {};
+  for (const modo of ["diretor", "acaso"]) {
+    const rng = M.criarRNG(semente), dist = new Array(META + 1).fill(0);
+    let venc = 0, chegou4 = 0, preso = 0, soma = 0;
+    for (let i = 0; i < n; i++) {
+      const p = M.jogarPartida(rng, modo);
+      dist[p.max]++; if (p.venceu) venc++; if (p.max >= META - 1) chegou4++; preso += p.preso; soma += p.max;
+      if (i % 2000 === 1999) { btn.textContent = `Jogando... ${Math.round(((i + 1) / n) * 50 + (modo === "acaso" ? 50 : 0))}%`; await esperar(0); }
+    }
+    res[modo] = { dist, venc, chegou4, preso: preso / n, media: soma / n };
+  }
+  btn.textContent = "Rodar de novo"; btn.disabled = false;
+  mcDados = { n, ...res };
+  $("mcRes").hidden = false;
+  desenharMC();
+  const f = (x) => x.toLocaleString("pt-BR"), d = res.diretor, a = res.acaso;
+  $("mcNum").innerHTML = `
+    <div class="destaque"><small>SorteBets: venceram</small><b>${f(d.venc)} de ${f(n)}</b>${pct(d.chegou4 / n)} chegaram a 4 e ficaram presos ~${d.preso.toFixed(1).replace(".", ",")} giros</div>
+    <div><small>Acaso puro: venceram</small><b>${f(a.venc)} de ${f(n)}</b>${pct(a.dist[0] / n)} terminaram com 0 pontos</div>
+    <div><small>Pontos médios</small><b>${d.media.toFixed(2).replace(".", ",")} × ${a.media.toFixed(2).replace(".", ",")}</b>A diferença é a isca: pontos que o acaso não daria.</div>`;
+}
+function desenharMC() {
+  if (!mcDados) return;
+  const [g, w, h] = prepararCanvas($("mcGraf"));
+  const L = 36, R = 10, T = 22, B = 30, n = mcDados.n, grupos = META + 1;
+  const gw = (w - L - R) / grupos, bw = Math.min(gw * 0.36, 46);
+  const y = (p) => h - B - (h - T - B) * p;
+  g.font = FONTE;
+  [0, 0.25, 0.5, 0.75, 1].forEach((p) => {
+    g.strokeStyle = COR.linha; g.lineWidth = 1; g.beginPath(); g.moveTo(L, y(p)); g.lineTo(w - R, y(p)); g.stroke();
+    g.fillStyle = COR.suave; g.fillText(p * 100 + "%", 0, y(p) + 4);
+  });
+  const hach = document.createElement("canvas"); hach.width = hach.height = 8;
+  const hg = hach.getContext("2d"); hg.fillStyle = COR.creme; hg.fillRect(0, 0, 8, 8);
+  hg.strokeStyle = COR.preto; hg.lineWidth = 1.5; hg.beginPath(); hg.moveTo(0, 8); hg.lineTo(8, 0); hg.stroke();
+  const padrao = g.createPattern(hach, "repeat");
+  for (let k = 0; k < grupos; k++) {
+    const cx = L + gw * k + gw / 2;
+    [["diretor", COR.vermelho, -1], ["acaso", padrao, 1]].forEach(([m, cor, lado]) => {
+      const p = mcDados[m].dist[k] / n, bx = cx + (lado < 0 ? -bw - 2 : 2);
+      g.fillStyle = cor; g.fillRect(bx, y(p), bw, y(0) - y(p));
+      g.strokeStyle = COR.preto; g.lineWidth = 2; g.strokeRect(bx, y(p), bw, y(0) - y(p));
+      if (p >= 0.005) { g.fillStyle = COR.preto; g.textAlign = "center"; g.fillText(pct(p), bx + bw / 2, y(p) - 6); g.textAlign = "left"; }
+    });
+    g.fillStyle = k === META ? COR.vermelho : COR.preto; g.textAlign = "center";
+    g.font = '900 13px Lato, Arial';
+    g.fillText(k === META ? "5 (venceu)" : `${k} pts`, cx, h - 10); g.textAlign = "left"; g.font = FONTE;
+  }
+  g.fillStyle = COR.suave; g.fillText("pontos máximos de cada jogador", L, 12);
+}
+
+/* ---------------------------------------------------------------
+   Placar da turma (localStorage deste navegador)
+   --------------------------------------------------------------- */
+const CHAVE = "sortibet-placar";
+let placar = carregar();
+function carregar() { try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch { return []; } }
+function salvar() { try { localStorage.setItem(CHAVE, JSON.stringify(placar)); } catch { /* modo privado */ } }
+function registrar() {
+  if (!st.id) return;
+  placar = carregar();
+  const j = { id: st.id, nome: st.nome, max: Math.max(...st.hist), rodadas: st.rodadas, preso: st.preso, near: st.near, gasto: st.gasto };
+  const i = placar.findIndex((p) => p.id === st.id);
+  if (i < 0) placar.push(j); else placar[i] = j;
+  salvar(); mostrarPlacar();
+}
+function mostrarPlacar() {
+  const lista = [...placar].sort((a, b) => b.max - a.max || b.preso - a.preso || a.id - b.id);
+  $("nJog").textContent = placar.length;
+  $("nVenc").textContent = placar.filter((p) => p.max >= META).length;
+  $("tabela").hidden = !placar.length; $("vazio").hidden = placar.length > 0;
+  $("limpar").disabled = !placar.length;
+  $("lista").innerHTML = lista.map((p, i) => `<tr class="${st && p.id === st.id ? "atual" : ""}">
+    <td>${i + 1}</td><td class="nm">${esc(p.nome)}</td>
+    <td><span class="pmax${p.max === META - 1 ? " quase" : ""}">${p.max}</span><small>/${META}</small></td>
+    <td>${p.rodadas}</td><td>${p.preso}</td><td>${p.near}</td><td>${p.gasto}</td></tr>`).join("");
+}
+function fecharConfirma() { $("confirma").hidden = true; $("limpar").hidden = false; }
+$("limpar").onclick = () => {
+  $("confirmaTxt").textContent = `Apagar os ${placar.length} jogadores do placar? Isso não pode ser desfeito.`;
+  $("confirma").hidden = false; $("limpar").hidden = true; $("naoLimpar").focus();
+};
+$("naoLimpar").onclick = () => { fecharConfirma(); $("limpar").focus(); };
+$("simLimpar").onclick = () => { placar = []; salvar(); fecharConfirma(); mostrarPlacar(); };
+addEventListener("storage", (e) => { if (e.key === CHAVE || e.key === null) { placar = carregar(); mostrarPlacar(); } });
+
+/* ---------------------------------------------------------------
+   Abas (Jogar só abre depois do cadastro)
+   --------------------------------------------------------------- */
+const ABAS = ["cadastro", "jogar", "algo", "placar"];
+function abrir(aba) {
+  if (aba === "jogar" && !cadastrado) { $("alerta").hidden = false; aba = "cadastro"; $("nome").focus(); }
+  ABAS.forEach((a) => { $("t-" + a).setAttribute("aria-selected", a === aba); $("p-" + a).hidden = a !== aba; });
+  document.body.dataset.aba = aba;
+  scrollTo({ top: 0 });
+  if (aba === "jogar") ["r0", "r1", "r2"].forEach((_, r) => mostrarParado(r));
+  if (aba === "algo") { desenhar(); mostrarLog(); desenharMC(); }
+  if (aba === "placar") { fecharConfirma(); mostrarPlacar(); }
+  musicaConformeTela();
+}
+ABAS.forEach((a) => ($("t-" + a).onclick = () => abrir(a)));
+// Setas do teclado entre as abas
+document.querySelector(".tabs").addEventListener("keydown", (e) => {
+  if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+  const vis = ABAS.filter((a) => !$("t-" + a).hidden), i = vis.indexOf(e.target.id.slice(2));
+  const prox = vis[(i + (e.key === "ArrowRight" ? 1 : vis.length - 1)) % vis.length];
+  $("t-" + prox).focus(); abrir(prox);
+});
+
+/* ---------------------------------------------------------------
+   Cadastro: só o nome, que fica nesta página e no placar local
+   --------------------------------------------------------------- */
+$("cadastro").onsubmit = (e) => {
+  e.preventDefault();
+  const nome = $("nome").value.trim();
+  $("nome").setAttribute("aria-invalid", !nome);
+  if (!nome) { $("nome").focus(); return; }
+  S.iniciar(); // o navegador só libera o áudio depois de um toque/clique
+  const primeiro = nome.split(/\s+/)[0];
+  novo(); st.id = Date.now(); st.nome = nome; cadastrado = true;
+  $("jogador").textContent = primeiro; $("jogador").title = nome; $("conta").hidden = false;
+  $("t-jogar").classList.remove("locked");
+  $("t-cadastro").hidden = true; $("alerta").hidden = true;
+  $("quem").textContent = `Resultados de ${nome}.`;
+  setMsg(`Bem-vindo, ${primeiro}! Junte 5 pontos.`);
+  balao(`E aí, ${primeiro}! Cinco pontos e a máquina é sua.`);
+  atualizar(); registrar(); abrir("jogar"); $("girar").focus();
+};
+
+$("girar").onclick = girar;
+$("verAlgo").onclick = () => abrir("algo");
+$("mcRodar").onclick = rodarMC;
+$("som").onclick = () => {
+  S.iniciar(); S.efeitos = !S.efeitos;
+  $("som").setAttribute("aria-pressed", S.efeitos);
+  $("som").title = S.efeitos ? "Desligar os efeitos" : "Ligar os efeitos";
+};
+$("musica").onclick = () => {
+  S.iniciar(); S.musica = !S.musica;
+  $("musica").setAttribute("aria-pressed", S.musica);
+  $("musica").title = S.musica ? "Desligar a música" : "Ligar a música";
+  musicaConformeTela();
+};
+document.addEventListener("visibilitychange", musicaConformeTela);
+// Próximo jogador no mesmo aparelho: volta ao cadastro, o anterior fica no placar
+$("novoJogador").onclick = () => {
+  novo(); st.rng = null; cadastrado = false; S.intensidade(false); reagir();
+  $("nome").value = ""; $("nome").removeAttribute("aria-invalid");
+  $("conta").hidden = true; $("t-cadastro").hidden = false; $("t-jogar").classList.add("locked");
+  $("fim").hidden = true; $("reels").classList.remove("trio"); $("maquina").classList.remove("ganhou");
+  $("quem").textContent = "Ninguém jogou ainda. Faça o cadastro e jogue para ver seus números aqui.";
+  setMsg("Gire e junte 5 pontos!"); balao("Bora! O primeiro giro é o mais gostoso.");
+  atualizar(); mostrarPlacar(); abrir("cadastro"); $("nome").focus();
+};
+addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || document.body.dataset.aba !== "jogar") return;
+  if (e.target.closest("button,input,select,textarea,summary")) return; // o botão já trata o espaço
+  e.preventDefault(); girar();
+});
+let tRes;
+addEventListener("resize", () => {
+  clearTimeout(tRes);
+  tRes = setTimeout(() => {
+    if (!$("p-algo").hidden) { desenhar(); desenharMC(); }
+    if (!$("p-jogar").hidden && !st.girando) [0, 1, 2].forEach(mostrarParado);
+  }, 120);
+});
+
+// Início
+novo(); st.rng = null; mostrarPlacar(); montarExplicacao();
+[0, 1, 2].forEach(mostrarParado);
+atualizar();

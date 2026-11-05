@@ -1,0 +1,190 @@
+SORTEBETS (antigo Sortibet 777)
+Não é só sorte. Entenda o algoritmo.
+Jogo interativo do Projeto de Extensão
+"Bets e Slots: o algoritmo por trás da perda"
+Público-alvo: estudantes do Ensino Médio
+Todas as fichas são de mentira. Nenhum dinheiro real é usado.
+
+==================================================
+COMO ABRIR O JOGO
+==================================================
+1. Descompacte esta pasta.
+2. Dê dois cliques no arquivo "sortibet.html".
+3. Ele abre no navegador (Chrome, Edge, Firefox ou no celular).
+   Não precisa instalar nada nem estar conectado à internet.
+
+Linguagem usada: HTML + CSS + JavaScript, cada um em seu lugar:
+
+  Sortibet/
+  ├── sortibet.html       estrutura da página (abas, cadastro, máquina, placar)
+  ├── gerar-qrcode.html   gera o cartaz com QR code para imprimir e para slide
+  ├── fonts/              fontes do manual (DejaVu Serif e Lato)
+  ├── css/
+  │   └── estilo.css      visual do Manual de Marca (cores, fontes, layout)
+  ├── img/                emblema SorteBets, ícone do dado e capa
+  │                       (os símbolos dos rolos são SVG no próprio HTML)
+  ├── js/
+  │   ├── motor.js        O ALGORITMO: gerador de números, rolos virtuais,
+  │   │                   diretor e simulação com milhares de jogadores
+  │   ├── script.js       a tela: animação, letreiro, aba Algoritmo, placar
+  │   ├── som.js          música e efeitos sonoros (Web Audio, sem arquivos)
+  │   ├── gerar-qrcode.js desenho do cartaz com QR code
+  │   ├── logo-dados.js   logo embutido para o cartaz
+  │   └── qrcode.js       biblioteca que monta o QR code (qrcode-generator, MIT)
+  └── testes/
+      └── teste-motor.js  13 testes do algoritmo (rodar: node testes/teste-motor.js)
+
+Não precisa de internet: as fontes do Manual de Marca (DejaVu Serif
+Condensed Bold Italic nos títulos e Lato nos textos) estão embutidas
+na pasta fonts/. Visual: anos 1930, art déco, dado estático (sem
+personagem), cores vermelho #B83832, creme #F3E8D2, dourado #C69A43
+e preto #171411.
+
+Mantenha as pastas css e js junto do sortibet.html, senão o site
+abre sem visual e sem funcionar.
+
+==================================================
+QR CODE PARA OS ALUNOS ABRIREM NO CELULAR
+==================================================
+1. Publique a pasta inteira num site gratuito. Ela já vem pronta para
+   a Vercel (arquivo vercel.json): dentro da pasta, rode "vercel --prod".
+   Também funciona no GitHub Pages ou no Netlify Drop. Você recebe um
+   link que começa com https://
+2. Abra "gerar-qrcode.html", cole o link e clique em GERAR QR CODE.
+3. Baixe as duas imagens: uma para imprimir (A4 em pé) e outra para
+   o slide (16:9). Teste com o celular antes de imprimir.
+
+==================================================
+PLACAR DA TURMA
+==================================================
+- Cada jogador entra no placar com: nome, pontos máximos, rodadas,
+  rodadas presas no 4, vezes que apareceu "faltou só um" e fichas gastas.
+- O placar fica salvo no navegador do computador (sem conta, sem
+  internet) e continua lá mesmo fechando a página.
+- Atenção: cada aparelho tem o seu próprio placar. Quem joga pelo
+  celular (via QR code) fica no placar do próprio celular, não no do
+  computador da apresentação.
+- Dica: abra o placar numa segunda janela no projetor; ele se atualiza
+  sozinho enquanto os alunos jogam na outra janela.
+- Antes de uma nova turma, use "Limpar placar" (pede confirmação).
+
+==================================================
+REGRAS QUE OS ALUNOS VEEM
+==================================================
+- O site tem abas no topo: Cadastro, Jogar, Algoritmo e Placar. A aba
+  Jogar só libera depois do cadastro.
+- Antes de jogar, o aluno faz um "cadastro" só com o nome, como
+  num site de aposta, e recebe o "bônus" de 200 fichas grátis.
+- Cada aluno começa com 200 fichas.
+- Cada giro custa 10 fichas.
+- Não dá para recarregar: quando as 200 fichas acabam, o jogo termina.
+- Três símbolos iguais = 1 ponto.
+- Meta: fazer 5 pontos para vencer a máquina.
+- Cada aluno joga no próprio celular, entrando pelo link ou QR code.
+  Num computador compartilhado, quando as fichas acabam, clique em
+  "Próximo jogador" (ou recarregue a página): volta para o cadastro,
+  e o anterior fica no placar.
+
+==================================================
+O QUE A MÁQUINA FAZ ESCONDIDO (O ALGORITMO)
+==================================================
+A máquina tem duas camadas, como os caça-níqueis reais (js/motor.js):
+
+CAMADA 1 · O ACASO, JÁ VICIADO
+- Um gerador de números pseudoaleatórios (xoshiro128**) com semente
+  registrada. A mesma semente repete a mesma partida (auditável).
+- Cada rolo tem 22 posições (11 símbolos e 11 vazios), mas elas não
+  pesam igual: é um "rolo virtual" de 64 casas. O dado aparece no
+  desenho, mas ocupa só 1 casa em 64. Os vazios colados nele ocupam
+  até 7. Por isso ele vive passando raspando.
+- Sem nenhuma trapaça extra, a chance de trio já seria só 0,38% por giro.
+
+CAMADA 2 · O DIRETOR (decide antes da animação)
+1. COMEÇO FÁCIL (ISCA QUE ESFRIA): a chance de ponto começa em 50%
+   (cerca de 130 vezes o acaso) e cai a cada ponto: 50%, 40%, 30%, 25%.
+   O aluno sobe rápido e sente que ficou difícil "por mérito".
+   SECA MÁXIMA: abaixo de 4, nunca passa de 3 giros sem ponto; o 4º
+   giro é garantido. Assim TODO aluno chega a 4 antes de desanimar.
+2. TRAVA NO 4: em 4 pontos, a chance do 5º ponto é ZERO. Sempre.
+3. "FALTOU SÓ UM" FABRICADO: travado no 4, cerca de 2 em cada 3 giros
+   param dois símbolos na linha e o terceiro logo acima ou abaixo dela.
+   O último rolo gira mais devagar para criar suspense.
+4. VAI E VOLTA: depois de 2 giros no 4 (carência, para o "falta um"
+   bater), 12% dos giros tiram 1 ponto. E a máquina devolve rápido:
+   60% de chance no giro seguinte. Cair para 3 e voltar para 4 renova
+   a esperança.
+5. RESULTADO DECIDIDO NO CLIQUE: o diretor escolhe o resultado e depois
+   procura nos rolos uma parada REAL que mostre aquilo. A animação só
+   obedece.
+6. CADASTRO COM BÔNUS: o aluno entregou o nome em troca de "fichas
+   grátis". (No Sortibet o nome só fica no placar deste navegador.)
+
+O diretor tem MEMÓRIA da partida: pontos, giros seguidos sem ponto,
+giros presos no 4 e se acabou de tirar um ponto. Cada giro no registro
+mostra a regra aplicada e a chance real naquele momento.
+
+OS SONS (js/som.js) TAMBÉM SÃO UM TRUQUE
+- Música de ragtime dos anos 1930, com chiado de disco, criada pelo
+  próprio código (nenhum arquivo de áudio). Botões: efeitos e música.
+- Ponto: fanfarra de metais, prato e chuva de moedas.
+- "Quase": apito caindo e metais escorregando, parece festa.
+- Derrota: quase silêncio. Perder não pode chamar atenção.
+- Preso no 4: a música acelera e ganha trompete e chimbal.
+- Ponto tirado e fim das fichas: trombone triste.
+
+O LETREIRO "A MÁQUINA DIZ" FALA A CADA GIRO
+- frases de incentivo que imitam os sites de aposta ("Só mais um giro",
+  "Você já investiu tanto... continua!")
+- a borda muda de cor no ponto, no "quase", no ponto tirado e no fim
+- sem mascote: pelo Manual de Marca, o dado é estático e sem personagem
+
+Todos esses números ficam no objeto CONFIG, no começo de js/motor.js.
+
+A ABA ALGORITMO MOSTRA
+- os números da partida do aluno e a chance real (0%) do 5º ponto;
+- o gráfico dos pontos, com cada "faltou só um" e cada ponto tirado;
+- o REGISTRO DO DIRETOR: giro a giro, a regra aplicada e a chance real;
+- os pesos dos rolos virtuais e a configuração do diretor;
+- TESTE COM MIL JOGADORES: o computador joga 1.000 (ou até 100.000)
+  partidas com o diretor e com o acaso puro e compara em um gráfico.
+  Resultado típico: com o diretor, 100% chegam a 4 pontos, ficam
+  presos uns 10 giros e ninguém vence; no acaso puro, cerca de 93%
+  terminam com zero pontos.
+  Os pontos a mais são a isca.
+
+==================================================
+SUGESTÃO DE ROTEIRO PARA A APRESENTAÇÃO
+==================================================
+1. Palestra educativa (curta): o que são bets e caça-níqueis on-line.
+2. Chamem alguns alunos para jogar o Sortibet. Deixem a turma torcer.
+   Desafio: "Quem conseguir 5 pontos vence a máquina!"
+3. Esperem o momento em que alguém fica preso no 4 e grita
+   "faltou só um!". Esse é o ponto alto.
+4. Cliquem na aba "Algoritmo" (ou no botão "Ver como o algoritmo
+   funciona" que aparece quando as fichas acabam). Ela mostra:
+   - quantas rodadas o aluno passou preso no 4;
+   - quantos "faltou só um" a máquina fabricou;
+   - quantas fichas foram gastas;
+   - um gráfico com os pontos sempre abaixo da linha da meta;
+   - o registro do diretor, giro a giro;
+   - o teste com mil jogadores (rodem ao vivo para a turma).
+5. Expliquem os 6 truques acima e liguem com a vida real: os jogos de
+   aposta on-line também são programados, e a casa sempre ganha no longo
+   prazo.
+6. Fechem com a frase do cartaz:
+   "Decisões conscientes hoje, um futuro mais seguro amanhã."
+
+Perguntas para debate com a turma:
+- Em que momento você achou que ia ganhar?
+- Se fosse dinheiro de verdade, você teria recarregado?
+- Por que a máquina deixa a gente ganhar no começo?
+
+==================================================
+EQUIPE
+==================================================
+Almerinda Maria Feitosa Barros (líder)
+Francisco das Chagas Feitosa Barros Júnior
+José Maurício Paraíba de Sousa
+João Henrique Carvalho Araújo
+Getúlio José da Silva Neto
+João Pedro Leocádio Soares
