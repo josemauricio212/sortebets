@@ -402,3 +402,5 @@ footer small{color:var(--suave)}
   :root{--cel:54px}
   .marca small{display:none}
 }
+.confirma .campo{flex-direction:column;align-items:stretch;gap:4px;flex:1 1 220px;margin:0}
+.confirma .alerta{margin:0;flex-basis:100%}

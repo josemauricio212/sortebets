@@ -289,39 +289,105 @@ function desenharMC() {
 }
 
 /* ---------------------------------------------------------------
-   Placar da turma (localStorage deste navegador)
+   Placar da turma
+   - No site publicado: placar ONLINE (api/placar.js + banco Redis),
+     o mesmo em todos os celulares e computadores da turma.
+   - Aberto direto do arquivo, ou sem internet: só neste navegador.
+   A turma vem do link: sortibet777.vercel.app/?turma=3a
    --------------------------------------------------------------- */
 const CHAVE = "sortibet-placar";
+const TURMA = (new URLSearchParams(location.search).get("turma") || "geral").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20) || "geral";
+const API = "api/placar?turma=" + encodeURIComponent(TURMA);
+const PODE_ONLINE = location.protocol === "https:" || location.protocol === "http:";
+let online = false;            // o banco respondeu da última vez?
 let placar = carregar();
+let placarOnline = [];
 function carregar() { try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch { return []; } }
 function salvar() { try { localStorage.setItem(CHAVE, JSON.stringify(placar)); } catch { /* modo privado */ } }
+const novoId = () => Date.now().toString(36) + "-" + sorteioUI.u32().toString(36);
+
+// Envio em fila: só o estado mais recente do jogador vai para o banco, em ordem
+let aEnviar = null, enviando = false;
+async function enviar(j) {
+  aEnviar = j;
+  if (enviando || !PODE_ONLINE) return;
+  enviando = true;
+  while (aEnviar) {
+    const corpo = JSON.stringify(aEnviar); aEnviar = null;
+    try {
+      const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo });
+      online = r.ok;
+    } catch { online = false; }
+  }
+  enviando = false;
+  buscarPlacar();
+}
+async function buscarPlacar() {
+  if (!PODE_ONLINE) return mostrarPlacar();
+  try {
+    const r = await fetch(API, { cache: "no-store" });
+    if (!r.ok) throw 0;
+    placarOnline = (await r.json()).jogadores || []; online = true;
+  } catch { online = false; }
+  mostrarPlacar();
+}
 function registrar() {
   if (!st.id) return;
   placar = carregar();
   const j = { id: st.id, nome: st.nome, max: Math.max(...st.hist), rodadas: st.rodadas, preso: st.preso, near: st.near, gasto: st.gasto };
   const i = placar.findIndex((p) => p.id === st.id);
   if (i < 0) placar.push(j); else placar[i] = j;
-  salvar(); mostrarPlacar();
+  salvar(); enviar(j); mostrarPlacar();
+}
+// Lista exibida: a do banco (com o jogador deste aparelho sempre atualizado) ou a local
+function listaAtual() {
+  if (!online) return placar;
+  const l = placarOnline.filter((p) => !st || p.id !== st.id);
+  const eu = st && st.id && placar.find((p) => p.id === st.id);
+  return eu ? [...l, eu] : l;
 }
 function mostrarPlacar() {
-  const lista = [...placar].sort((a, b) => b.max - a.max || b.preso - a.preso || a.id - b.id);
-  $("nJog").textContent = placar.length;
-  $("nVenc").textContent = placar.filter((p) => p.max >= META).length;
-  $("tabela").hidden = !placar.length; $("vazio").hidden = placar.length > 0;
-  $("limpar").disabled = !placar.length;
+  const todos = listaAtual();
+  const lista = [...todos].sort((a, b) => b.max - a.max || b.preso - a.preso || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+  $("nJog").textContent = todos.length;
+  $("nVenc").textContent = todos.filter((p) => p.max >= META).length;
+  $("tabela").hidden = !todos.length; $("vazio").hidden = todos.length > 0;
+  $("limpar").disabled = !todos.length;
   $("lista").innerHTML = lista.map((p, i) => `<tr class="${st && p.id === st.id ? "atual" : ""}">
     <td>${i + 1}</td><td class="nm">${esc(p.nome)}</td>
     <td><span class="pmax${p.max === META - 1 ? " quase" : ""}">${p.max}</span><small>/${META}</small></td>
     <td>${p.rodadas}</td><td>${p.preso}</td><td>${p.near}</td><td>${p.gasto}</td></tr>`).join("");
+  $("turmaNome").textContent = TURMA === "geral" ? "" : ` · Turma ${TURMA.toUpperCase()}`;
+  $("placarStatus").textContent = online
+    ? "Placar online: aparece em todos os celulares e computadores que abrirem este link. Atualiza sozinho."
+    : PODE_ONLINE ? "Sem conexão com o placar online. Mostrando só os jogos deste aparelho; tentando de novo..."
+    : "O placar fica salvo só neste navegador (o jogo foi aberto direto do arquivo).";
 }
-function fecharConfirma() { $("confirma").hidden = true; $("limpar").hidden = false; }
+function fecharConfirma() { $("confirma").hidden = true; $("limpar").hidden = false; $("senhaErro").hidden = true; }
 $("limpar").onclick = () => {
-  $("confirmaTxt").textContent = `Apagar os ${placar.length} jogadores do placar? Isso não pode ser desfeito.`;
-  $("confirma").hidden = false; $("limpar").hidden = true; $("naoLimpar").focus();
+  const n = listaAtual().length;
+  $("confirmaTxt").textContent = online
+    ? `Apagar os ${n} jogadores do placar online${TURMA === "geral" ? "" : " da turma " + TURMA.toUpperCase()}? Some em todos os aparelhos.`
+    : `Apagar os ${n} jogadores do placar? Isso não pode ser desfeito.`;
+  $("senhaCampo").hidden = !online; $("senha").value = "";
+  $("confirma").hidden = false; $("limpar").hidden = true; (online ? $("senha") : $("naoLimpar")).focus();
 };
 $("naoLimpar").onclick = () => { fecharConfirma(); $("limpar").focus(); };
-$("simLimpar").onclick = () => { placar = []; salvar(); fecharConfirma(); mostrarPlacar(); };
+$("simLimpar").onclick = async () => {
+  if (online) {
+    $("simLimpar").disabled = true;
+    try {
+      const r = await fetch(API, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ senha: $("senha").value }) });
+      if (!r.ok) { $("senhaErro").textContent = (await r.json().catch(() => ({}))).erro || "Não deu para limpar."; $("senhaErro").hidden = false; return; }
+      placarOnline = [];
+    } catch { $("senhaErro").textContent = "Sem conexão. Tente de novo."; $("senhaErro").hidden = false; return; }
+    finally { $("simLimpar").disabled = false; }
+  }
+  placar = []; salvar(); fecharConfirma(); mostrarPlacar();
+};
 addEventListener("storage", (e) => { if (e.key === CHAVE || e.key === null) { placar = carregar(); mostrarPlacar(); } });
+// Enquanto a aba Placar estiver aberta na tela, busca o placar da turma a cada 4 segundos
+setInterval(() => { if (PODE_ONLINE && document.body.dataset.aba === "placar" && !document.hidden) buscarPlacar(); }, 4000);
 
 /* ---------------------------------------------------------------
    Abas (Jogar só abre depois do cadastro)
@@ -334,7 +400,7 @@ function abrir(aba) {
   scrollTo({ top: 0 });
   if (aba === "jogar" && !st.girando) [0, 1, 2].forEach(mostrarParado); // não interrompe um giro em andamento
   if (aba === "algo") { desenhar(); mostrarLog(); desenharMC(); }
-  if (aba === "placar") { fecharConfirma(); mostrarPlacar(); }
+  if (aba === "placar") { fecharConfirma(); mostrarPlacar(); buscarPlacar(); }
   musicaConformeTela();
 }
 ABAS.forEach((a) => ($("t-" + a).onclick = () => abrir(a)));
@@ -356,7 +422,7 @@ $("cadastro").onsubmit = (e) => {
   if (!nome) { $("nome").focus(); return; }
   S.iniciar(); // o navegador só libera o áudio depois de um toque/clique
   const primeiro = nome.split(/\s+/)[0];
-  novo(); st.id = Date.now(); st.nome = nome; cadastrado = true;
+  novo(); st.id = novoId(); st.nome = nome; cadastrado = true;
   $("jogador").textContent = primeiro; $("jogador").title = nome; $("conta").hidden = false;
   $("t-jogar").classList.remove("locked");
   $("t-cadastro").hidden = true; $("alerta").hidden = true;
@@ -406,6 +472,6 @@ addEventListener("resize", () => {
 });
 
 // Início
-novo(); st.rng = null; mostrarPlacar(); montarExplicacao();
+novo(); st.rng = null; mostrarPlacar(); buscarPlacar(); montarExplicacao();
 [0, 1, 2].forEach(mostrarParado);
 atualizar();

@@ -59,14 +59,26 @@ PLACAR DA TURMA
 ==================================================
 - Cada jogador entra no placar com: nome, pontos máximos, rodadas,
   rodadas presas no 4, vezes que apareceu "faltou só um" e fichas gastas.
-- O placar fica salvo no navegador do computador (sem conta, sem
-  internet) e continua lá mesmo fechando a página.
-- Atenção: cada aparelho tem o seu próprio placar. Quem joga pelo
-  celular (via QR code) fica no placar do próprio celular, não no do
-  computador da apresentação.
-- Dica: abra o placar numa segunda janela no projetor; ele se atualiza
-  sozinho enquanto os alunos jogam na outra janela.
-- Antes de uma nova turma, use "Limpar placar" (pede confirmação).
+- PLACAR ONLINE: no site publicado, o placar é o mesmo em todos os
+  celulares e computadores. Vários alunos jogam ao mesmo tempo e o
+  placar do projetor se atualiza sozinho (a cada 4 segundos).
+- Separar turmas: acrescente ?turma=NOME no fim do link. Exemplo:
+  https://sortibet777.vercel.app/?turma=3a
+  Cada turma tem o seu placar. Gere o QR code já com esse link.
+- O placar de uma turma some sozinho 14 dias depois do último jogo.
+- "Limpar placar" no site publicado pede a senha do professor.
+- Aberto direto do arquivo (sem internet), o placar volta a ser só
+  daquele navegador, como antes.
+
+COMO LIGAR O BANCO DE DADOS (uma vez só, grátis)
+1. Entre em vercel.com, abra o projeto sortibet777 > aba Storage.
+2. Create Database > Upstash (Redis) > plano Free > Create.
+3. Conecte o banco ao projeto sortibet777 (Connect Project). A Vercel
+   cria sozinha as variáveis KV_REST_API_URL e KV_REST_API_TOKEN.
+4. Em Settings > Environment Variables, crie PLACAR_SENHA com a senha
+   que o professor vai usar para limpar o placar.
+5. Publique de novo: dentro da pasta, rode "vercel --prod".
+O código do placar online está em api/placar.js.
 
 ==================================================
 REGRAS QUE OS ALUNOS VEEM
@@ -117,7 +129,7 @@ CAMADA 2 · O DIRETOR (decide antes da animação)
    procura nos rolos uma parada REAL que mostre aquilo. A animação só
    obedece.
 6. CADASTRO COM BÔNUS: o aluno entregou o nome em troca de "fichas
-   grátis". (No Sortibet o nome só fica no placar deste navegador.)
+   grátis". (No SorteBets o nome só vai para o placar da turma.)
 
 O diretor tem MEMÓRIA da partida: pontos, giros seguidos sem ponto,
 giros presos no 4 e se acabou de tirar um ponto. Cada giro no registro

@@ -93,7 +93,7 @@
             <input id="nome" name="nome" type="text" autocomplete="name" required maxlength="40" placeholder="Seu nome">
           </div>
           <button class="cta" type="submit">Cadastrar e jogar</button>
-          <p class="aviso"><b>Você está usando fichas fictícias.</b> Nenhum dinheiro real. Seus dados não são salvos nem enviados para lugar nenhum.</p>
+          <p class="aviso"><b>Você está usando fichas fictícias.</b> Nenhum dinheiro real. Seu nome aparece no placar da turma, visível para quem abrir o site. Use só o primeiro nome ou um apelido.</p>
         </form>
       </div>
     </div>
@@ -276,7 +276,7 @@
   <section class="painel" id="p-placar" role="tabpanel" aria-labelledby="t-placar" hidden>
     <div class="placar">
       <div>
-        <span class="selo">Placar da turma</span>
+        <span class="selo">Placar da turma<span id="turmaNome"></span></span>
         <h2>Quem venceu a máquina?</h2>
       </div>
       <p class="resumo"><span class="par">Jogadores: <b id="nJog">0</b></span> <span class="sep" aria-hidden="true">|</span> <span class="par">Venceram: <b class="venc" id="nVenc">0</b></span></p>
@@ -294,12 +294,17 @@
       </div>
       <div class="confirma" id="confirma" role="alertdialog" aria-labelledby="confirmaTxt" hidden>
         <p id="confirmaTxt"></p>
+        <div class="campo" id="senhaCampo" hidden>
+          <label for="senha">Senha do professor</label>
+          <input id="senha" type="password" autocomplete="off" maxlength="60">
+        </div>
+        <p class="alerta" id="senhaErro" role="alert" hidden></p>
         <div>
           <button class="btn perigo" id="simLimpar" type="button">Sim, limpar placar</button>
           <button class="btn" id="naoLimpar" type="button">Cancelar</button>
         </div>
       </div>
-      <p class="nota">O placar fica salvo só neste navegador, sem conta e sem internet.</p>
+      <p class="nota" id="placarStatus" aria-live="polite">O placar fica salvo só neste navegador.</p>
     </div>
   </section>
 
