@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "SorteBets — Entenda o Algoritmo",
+  "short_name": "SorteBets",
+  "description": "Simulação educativa de algoritmos de caça-níqueis. Fichas fictícias, sem dinheiro real.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F3E8D2",
+  "theme_color": "#171411",
+  "orientation": "any",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/img/pwa-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/pwa-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/logo.webp",
+      "sizes": "640x640",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
+}
