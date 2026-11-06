@@ -1,47 +1,51 @@
 /* =====================================================================
    SORTEBETS · Placar online da turma (função da Vercel: /api/placar)
 
-   Banco: Upstash Redis (criado no painel da Vercel em Storage).
-   Cada turma é um "hash" no Redis e cada jogador é um campo dele.
-   Como cada jogador grava só o próprio campo, várias pessoas podem
-   jogar ao mesmo tempo sem uma apagar o placar da outra.
+   Banco: Postgres no Neon (criado pela Vercel, plano gratuito).
+   Tabela "placar": uma linha por jogador, com a chave (turma, id).
+   Cada jogador grava só a própria linha (upsert), então várias pessoas
+   podem jogar ao mesmo tempo sem uma apagar o placar da outra.
 
    GET    /api/placar?turma=3a            lista os jogadores da turma
    POST   /api/placar?turma=3a            grava/atualiza um jogador
    DELETE /api/placar?turma=3a            limpa a turma (pede a senha)
 
-   Variáveis de ambiente (a Vercel cria as duas primeiras sozinha ao
-   conectar o banco ao projeto):
-     KV_REST_API_URL / KV_REST_API_TOKEN   (ou UPSTASH_REDIS_REST_URL / _TOKEN)
-     PLACAR_SENHA                          senha do professor para limpar
+   Variáveis de ambiente na Vercel:
+     DATABASE_URL   criada sozinha ao conectar o banco Neon ao projeto
+     PLACAR_SENHA   senha do professor para limpar o placar
    ===================================================================== */
 "use strict";
+const { neon } = require("@neondatabase/serverless");
 
 const META = 5;
-const MAX_JOGADORES = 300;            // por turma, para ninguém lotar o banco
-const DURACAO = 60 * 60 * 24 * 14;   // a turma some sozinha 14 dias depois do último giro
+const MAX_JOGADORES = 300;   // por turma, para ninguém lotar o banco
+const DIAS = 14;             // jogadores somem 14 dias depois do último giro
 
-const URL_DB = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const URL_DB = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const sql = URL_DB ? neon(URL_DB) : null;
 
-// Envia comandos ao Redis pela API REST do Upstash (sem instalar pacote)
-async function redis(...comandos) {
-  const r = await fetch(URL_DB + "/pipeline", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
-    body: JSON.stringify(comandos),
-  });
-  if (!r.ok) throw new Error("Banco respondeu " + r.status);
-  const res = await r.json();
-  const erro = res.find((x) => x.error);
-  if (erro) throw new Error(erro.error);
-  return res.map((x) => x.result);
+// Cria a tabela na primeira chamada (uma vez por instância da função)
+let pronto = null;
+function prepararBanco() {
+  if (!pronto) pronto = (async () => {
+    await sql`CREATE TABLE IF NOT EXISTS placar (
+      turma      text        NOT NULL,
+      id         text        NOT NULL,
+      nome       text        NOT NULL,
+      max        smallint    NOT NULL DEFAULT 0,
+      rodadas    integer     NOT NULL DEFAULT 0,
+      preso      integer     NOT NULL DEFAULT 0,
+      near       integer     NOT NULL DEFAULT 0,
+      gasto      integer     NOT NULL DEFAULT 0,
+      atualizado timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (turma, id))`;
+  })().catch((e) => { pronto = null; throw e; });
+  return pronto;
 }
 
 const turmaDe = (q) => String(q || "geral").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20) || "geral";
-const chave = (turma) => "sortebets:placar:" + turma;
 const inteiro = (v, max) => Math.min(max, Math.max(0, Math.floor(Number(v)) || 0));
-// Nome: só texto simples, sem caracteres de controle, até 40 letras
+// Nome: texto simples, sem caracteres de controle, até 40 letras (o site escapa o HTML ao mostrar)
 const limparNome = (s) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
 
 function jogadorValido(b) {
@@ -56,15 +60,7 @@ function jogadorValido(b) {
     preso: inteiro(b.preso, 1000),
     near: inteiro(b.near, 1000),
     gasto: inteiro(b.gasto, 100000),
-    t: Date.now(),
   };
-}
-
-async function lista(turma) {
-  const [plano] = await redis(["HGETALL", chave(turma)]);
-  const out = [];
-  for (let i = 1; i < (plano || []).length; i += 2) { try { out.push(JSON.parse(plano[i])); } catch { /* ignora lixo */ } }
-  return out;
 }
 
 async function corpo(req) {
@@ -75,17 +71,29 @@ async function corpo(req) {
 
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-  if (!URL_DB || !TOKEN) return res.status(503).json({ erro: "Banco de dados não configurado na Vercel." });
+  if (!sql) return res.status(503).json({ erro: "Banco de dados não configurado na Vercel." });
   const turma = turmaDe(req.query && req.query.turma);
   try {
-    if (req.method === "GET") return res.status(200).json({ turma, jogadores: await lista(turma) });
+    await prepararBanco();
+
+    if (req.method === "GET") {
+      const jogadores = await sql`SELECT id, nome, max, rodadas, preso, near, gasto FROM placar
+        WHERE turma = ${turma} AND atualizado > now() - make_interval(days => ${DIAS})`;
+      return res.status(200).json({ turma, jogadores });
+    }
 
     if (req.method === "POST") {
       const j = jogadorValido(await corpo(req));
       if (!j) return res.status(400).json({ erro: "Jogador inválido." });
-      const [existe, total] = await redis(["HEXISTS", chave(turma), j.id], ["HLEN", chave(turma)]);
+      // De vez em quando, apaga quem não joga há mais de 14 dias
+      if (Math.random() < 0.05) await sql`DELETE FROM placar WHERE atualizado < now() - make_interval(days => ${DIAS})`;
+      const [{ total, existe }] = await sql`SELECT count(*)::int AS total, bool_or(id = ${j.id}) AS existe
+        FROM placar WHERE turma = ${turma}`;
       if (!existe && total >= MAX_JOGADORES) return res.status(409).json({ erro: "Placar da turma cheio. Peça ao professor para limpar." });
-      await redis(["HSET", chave(turma), j.id, JSON.stringify(j)], ["EXPIRE", chave(turma), DURACAO]);
+      await sql`INSERT INTO placar (turma, id, nome, max, rodadas, preso, near, gasto, atualizado)
+        VALUES (${turma}, ${j.id}, ${j.nome}, ${j.max}, ${j.rodadas}, ${j.preso}, ${j.near}, ${j.gasto}, now())
+        ON CONFLICT (turma, id) DO UPDATE SET nome = EXCLUDED.nome, max = EXCLUDED.max, rodadas = EXCLUDED.rodadas,
+          preso = EXCLUDED.preso, near = EXCLUDED.near, gasto = EXCLUDED.gasto, atualizado = now()`;
       return res.status(200).json({ ok: true });
     }
 
@@ -94,13 +102,14 @@ module.exports = async function handler(req, res) {
       const { senha: enviada } = await corpo(req);
       if (!senha) return res.status(403).json({ erro: "Limpeza desativada: falta a variável PLACAR_SENHA na Vercel." });
       if (String(enviada || "") !== senha) return res.status(403).json({ erro: "Senha errada." });
-      await redis(["DEL", chave(turma)]);
+      await sql`DELETE FROM placar WHERE turma = ${turma}`;
       return res.status(200).json({ ok: true });
     }
 
     res.setHeader("Allow", "GET, POST, DELETE");
     return res.status(405).json({ erro: "Método não permitido." });
   } catch (e) {
+    console.error("placar:", e.message);
     return res.status(502).json({ erro: "Falha ao falar com o banco de dados." });
   }
 };

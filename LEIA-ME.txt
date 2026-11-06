@@ -73,14 +73,14 @@ PLACAR DA TURMA
 - Aberto direto do arquivo (sem internet), o placar volta a ser só
   daquele navegador, como antes.
 
-COMO LIGAR O BANCO DE DADOS (uma vez só, grátis)
-1. Entre em vercel.com, abra o projeto sortibet777 > aba Storage.
-2. Create Database > Upstash (Redis) > plano Free > Create.
-3. Conecte o banco ao projeto sortibet777 (Connect Project). A Vercel
-   cria sozinha as variáveis KV_REST_API_URL e KV_REST_API_TOKEN.
-4. Em Settings > Environment Variables, crie PLACAR_SENHA com a senha
-   que o professor vai usar para limpar o placar.
-5. Publique de novo: dentro da pasta, rode "vercel --prod".
+O BANCO DE DADOS DO PLACAR (já está ligado)
+- Banco Postgres gratuito no Neon, criado pela Vercel com o nome
+  "sortibet-placar" e conectado ao projeto sortibet777. A Vercel cria
+  sozinha a variável DATABASE_URL.
+- A senha do professor para limpar o placar fica na variável
+  PLACAR_SENHA (Vercel > sortibet777 > Settings > Environment
+  Variables). Para trocar, edite essa variável e publique de novo.
+- Publicar: dentro da pasta, rode "vercel --prod".
 O código do placar online está em api/placar.js.
 
 ==================================================

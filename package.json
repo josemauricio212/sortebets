@@ -1,0 +1,9 @@
+{
+  "name": "sortebets",
+  "private": true,
+  "description": "SorteBets: simulação educativa. O jogo é HTML/CSS/JS puro; este arquivo só existe para o placar online (api/placar.js).",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0"
+  }
+}

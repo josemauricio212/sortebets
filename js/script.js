@@ -310,13 +310,17 @@ async function enviar(j) {
   while (aEnviar) {
     const corpo = JSON.stringify(aEnviar); aEnviar = null;
     try {
-      const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo });
+      const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo, keepalive: true }); // termina mesmo se a aba fechar
       online = r.ok;
     } catch { online = false; }
   }
   enviando = false;
   buscarPlacar();
 }
+// Aluno fechou a aba com um resultado ainda na fila: manda assim mesmo
+addEventListener("pagehide", () => {
+  if (aEnviar && PODE_ONLINE && navigator.sendBeacon) { navigator.sendBeacon(API, JSON.stringify(aEnviar)); aEnviar = null; }
+});
 async function buscarPlacar() {
   if (!PODE_ONLINE) return mostrarPlacar();
   try {
