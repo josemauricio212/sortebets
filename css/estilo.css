@@ -402,3 +402,10 @@ footer small{color:var(--suave)}
 }
 .confirma .campo{flex-direction:column;align-items:stretch;gap:4px;flex:1 1 220px;margin:0}
 .confirma .alerta{margin:0;flex-basis:100%}
+/* Placar: botão de remover um jogador (só no projetor/computador) */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.tabela td.rm,.tabela th.rm{width:1%;padding-left:6px}
+.rm-btn{font:700 16px/1 var(--texto);color:var(--suave);background:none;border:1.5px solid transparent;border-radius:8px;padding:6px 9px;cursor:pointer;opacity:.45}
+.tabela tr:hover .rm-btn,.rm-btn:focus-visible{opacity:1;border-color:var(--fio)}
+.rm-btn:hover{color:var(--vermelho);border-color:var(--vermelho)}
+@media (max-width:640px){.tabela .rm{display:none}}

@@ -134,7 +134,9 @@ function fimDeJogo() {
   balao(FALAS.fim); reagir("fim");
   S.intensidade(false); S.pararMusica(); S.fim();
   const ptsTxt = st.pts === 1 ? "1 ponto" : `${st.pts} pontos`;
-  $("fimTxt").textContent = `Você girou ${st.rodadas} vezes, chegou a ${ptsTxt}, passou ${st.preso} rodadas na trava e viu ${st.near} vezes o "faltou só um".`;
+  const t = st.memoria.teto, tetoTxt = t === 1 ? "1 ponto" : `${t} pontos`;
+  $("fimTxt").textContent = `Você girou ${st.rodadas} vezes, chegou a ${ptsTxt}, passou ${st.preso} rodadas na trava e viu ${st.near} vezes o "faltou só um". A máquina tinha decidido no seu cadastro que você pararia em ${tetoTxt}.`;
+  $("quem").textContent = `Resultados de ${st.nome}. Sem você saber, a máquina sorteou no cadastro o seu teto: ${tetoTxt}.`;
   $("fim").hidden = false;
   atualizar();
 }
@@ -173,7 +175,9 @@ function desenhar() {
   const L = 30, R = 14, T = 16, B = 24, H = st.hist, n = Math.max(H.length - 1, 1);
   const x = (i) => L + ((w - L - R) * i) / n, y = (v) => h - B - ((h - T - B) * v) / META;
   // faixa da trava (do teto do jogador até a meta)
-  const teto = cadastrado ? st.memoria.teto : META - 1;
+  // O teto só aparece quando o jogador já está nele ou o jogo acabou (antes disso, seria spoiler)
+  const revelado = cadastrado && (st.pts >= st.memoria.teto || st.fichas < C.custo);
+  const teto = revelado ? st.memoria.teto : META - 1;
   g.fillStyle = "#B8383214"; g.fillRect(L, y(META), w - L - R, y(teto) - y(META));
   g.font = FONTE; g.lineWidth = 1;
   for (let v = 0; v <= META; v++) {
@@ -355,34 +359,52 @@ function mostrarPlacar() {
   $("lista").innerHTML = lista.map((p, i) => `<tr class="${st && p.id === st.id ? "atual" : ""}">
     <td>${i + 1}</td><td class="nm">${esc(p.nome)}</td>
     <td><span class="pmax${p.max === META - 1 ? " quase" : ""}">${p.max}</span><small>/${META}</small></td>
-    <td>${p.rodadas}</td><td>${p.preso}</td><td>${p.near}</td><td>${p.gasto}</td></tr>`).join("");
+    <td>${p.rodadas}</td><td>${p.preso}</td><td>${p.near}</td><td>${p.gasto}</td>
+    <td class="rm"><button class="rm-btn" type="button" data-id="${esc(p.id)}" aria-label="Remover ${esc(p.nome)}" title="Remover do placar">✕</button></td></tr>`).join("");
   $("turmaNome").textContent = TURMA === "geral" ? "" : ` · Turma ${TURMA.toUpperCase()}`;
   $("placarStatus").textContent = online
     ? "Placar online: aparece em todos os celulares e computadores que abrirem este link. Atualiza sozinho."
     : PODE_ONLINE ? "Sem conexão com o placar online. Mostrando só os jogos deste aparelho; tentando de novo..."
     : "O placar fica salvo só neste navegador (o jogo foi aberto direto do arquivo).";
 }
-function fecharConfirma() { $("confirma").hidden = true; $("limpar").hidden = false; $("senhaErro").hidden = true; }
+// O mesmo quadro de confirmação serve para limpar tudo ou remover um jogador (alvo)
+let alvo = null;
+const SENHA_SESSAO = "sortibet-senha";
+function pedirConfirmacao(texto) {
+  $("confirmaTxt").textContent = texto;
+  $("simLimpar").textContent = alvo ? "Sim, remover" : "Sim, limpar placar";
+  $("senhaCampo").hidden = !online;
+  try { $("senha").value = sessionStorage.getItem(SENHA_SESSAO) || ""; } catch { $("senha").value = ""; }
+  $("senhaErro").hidden = true;
+  $("confirma").hidden = false; $("limpar").hidden = true; (online && !$("senha").value ? $("senha") : $("naoLimpar")).focus();
+}
+function fecharConfirma() { $("confirma").hidden = true; $("limpar").hidden = false; $("senhaErro").hidden = true; alvo = null; }
+$("lista").addEventListener("click", (e) => {
+  const b = e.target.closest(".rm-btn"); if (!b) return;
+  alvo = listaAtual().find((p) => String(p.id) === b.dataset.id); if (!alvo) return;
+  pedirConfirmacao(`Remover ${alvo.nome} do placar${online ? " online? Some em todos os aparelhos." : "?"}`);
+});
 $("limpar").onclick = () => {
+  alvo = null;
   const n = listaAtual().length;
   $("confirmaTxt").textContent = online
     ? `Apagar os ${n} jogadores do placar online${TURMA === "geral" ? "" : " da turma " + TURMA.toUpperCase()}? Some em todos os aparelhos.`
     : `Apagar os ${n} jogadores do placar? Isso não pode ser desfeito.`;
-  $("senhaCampo").hidden = !online; $("senha").value = "";
-  $("confirma").hidden = false; $("limpar").hidden = true; (online ? $("senha") : $("naoLimpar")).focus();
+  pedirConfirmacao($("confirmaTxt").textContent);
 };
 $("naoLimpar").onclick = () => { fecharConfirma(); $("limpar").focus(); };
 $("simLimpar").onclick = async () => {
   if (online) {
     $("simLimpar").disabled = true;
     try {
-      const r = await fetch(API, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ senha: $("senha").value }) });
-      if (!r.ok) { $("senhaErro").textContent = (await r.json().catch(() => ({}))).erro || "Não deu para limpar."; $("senhaErro").hidden = false; return; }
-      placarOnline = [];
+      const r = await fetch(API, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ senha: $("senha").value, id: alvo ? alvo.id : undefined }) });
+      if (!r.ok) { $("senhaErro").textContent = (await r.json().catch(() => ({}))).erro || "Não deu para apagar."; $("senhaErro").hidden = false; return; }
+      try { sessionStorage.setItem(SENHA_SESSAO, $("senha").value); } catch { /* modo privado */ } // não pede de novo nesta aba
+      placarOnline = alvo ? placarOnline.filter((p) => p.id !== alvo.id) : [];
     } catch { $("senhaErro").textContent = "Sem conexão. Tente de novo."; $("senhaErro").hidden = false; return; }
     finally { $("simLimpar").disabled = false; }
   }
-  placar = []; salvar(); fecharConfirma(); mostrarPlacar();
+  placar = alvo ? placar.filter((p) => p.id !== alvo.id) : []; salvar(); fecharConfirma(); mostrarPlacar();
 };
 addEventListener("storage", (e) => { if (e.key === CHAVE || e.key === null) { placar = carregar(); mostrarPlacar(); } });
 // Enquanto a aba Placar estiver aberta na tela, busca o placar da turma a cada 4 segundos
@@ -428,8 +450,7 @@ $("cadastro").onsubmit = (e) => {
   $("jogador").textContent = primeiro; $("jogador").title = nome; $("conta").hidden = false;
   $("t-jogar").classList.remove("locked");
   $("t-cadastro").hidden = true; $("alerta").hidden = true;
-  const t = st.memoria.teto;
-  $("quem").textContent = `Resultados de ${nome}. No cadastro, a máquina já sorteou o seu teto: ${t} ${t === 1 ? "ponto" : "pontos"}.`;
+  $("quem").textContent = `Resultados de ${nome}.`; // o teto só é revelado no fim do jogo
   setMsg(`Bem-vindo, ${primeiro}! Junte 5 pontos.`);
   balao(`E aí, ${primeiro}! Cinco pontos e a máquina é sua.`);
   atualizar(); registrar(); abrir("jogar"); $("girar").focus();

@@ -70,6 +70,11 @@ PLACAR DA TURMA
 - O placar de uma turma some sozinho 14 dias depois do último jogo.
 - "Limpar placar" no site publicado pede a senha do professor. Isso
   também libera de novo as 2 vagas de 4 pontos da turma.
+- Para tirar um aluno só (um apelido ofensivo, por exemplo), clique no
+  ✕ no fim da linha dele, no computador ou projetor. Também pede a
+  senha, que fica lembrada enquanto a aba estiver aberta.
+- O placar não aceita mais de 4 pontos: ninguém consegue forjar um
+  "venceu a máquina".
 - Aberto direto do arquivo (sem internet), o placar volta a ser só
   daquele navegador, como antes.
 
@@ -160,7 +165,8 @@ Todos esses números ficam no objeto CONFIG, no começo de js/motor.js.
 
 A ABA ALGORITMO MOSTRA
 - os números da partida do aluno e a chance real (0%) do 5º ponto;
-- o teto sorteado para o aluno no cadastro;
+- o teto sorteado para o aluno no cadastro (só aparece quando o aluno
+  chega nele ou quando as fichas acabam, para não estragar a surpresa);
 - o gráfico dos pontos, com cada "faltou só um";
 - o REGISTRO DO DIRETOR: giro a giro, a regra aplicada e a chance real;
 - os pesos dos rolos virtuais e a configuração do diretor;

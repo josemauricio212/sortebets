@@ -8,7 +8,8 @@
 
    GET    /api/placar?turma=3a            lista os jogadores da turma
    POST   /api/placar?turma=3a            grava/atualiza um jogador
-   DELETE /api/placar?turma=3a            limpa a turma (pede a senha)
+   DELETE /api/placar?turma=3a            limpa a turma (pede a senha),
+                                           ou só um jogador, se o corpo tiver "id"
 
    Variáveis de ambiente na Vercel:
      DATABASE_URL   criada sozinha ao conectar o banco Neon ao projeto
@@ -55,7 +56,7 @@ function jogadorValido(b) {
   if (!nome) return null;
   return {
     id, nome,
-    max: inteiro(b.max, META),
+    max: inteiro(b.max, META - 1),   // o jogo nunca passa de 4: ninguém forja um "venceu"
     rodadas: inteiro(b.rodadas, 1000),
     preso: inteiro(b.preso, 1000),
     near: inteiro(b.near, 1000),
@@ -99,10 +100,11 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "DELETE") {
       const senha = process.env.PLACAR_SENHA;
-      const { senha: enviada } = await corpo(req);
+      const { senha: enviada, id } = await corpo(req);
       if (!senha) return res.status(403).json({ erro: "Limpeza desativada: falta a variável PLACAR_SENHA na Vercel." });
       if (String(enviada || "") !== senha) return res.status(403).json({ erro: "Senha errada." });
-      await sql`DELETE FROM placar WHERE turma = ${turma}`;
+      if (id) await sql`DELETE FROM placar WHERE turma = ${turma} AND id = ${String(id)}`;
+      else await sql`DELETE FROM placar WHERE turma = ${turma}`;
       return res.status(200).json({ ok: true });
     }
 
