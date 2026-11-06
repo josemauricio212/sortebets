@@ -14,8 +14,9 @@
         mesmo sem trapaça explícita.
 
    2) DIRETOR (as regras escondidas do SorteBets)
-      Antes de qualquer animação, o diretor olha a sua partida (pontos,
-      giros sem ganhar, tempo preso no 4) e decide o resultado. Depois escolhe paradas REAIS nos rolos que
+      No cadastro, o diretor sorteia o TETO de pontos do jogador. Antes de
+      qualquer animação, ele olha a partida (pontos, teto, giros sem ganhar)
+      e decide o resultado. Depois escolhe paradas REAIS nos rolos que
       mostram exatamente esse resultado. A animação só obedece.
 
    Funciona no navegador (window.Motor) e no Node (require) para testes.
@@ -28,16 +29,17 @@
     meta: 5,                 // pontos para "vencer a máquina"
     fichasIniciais: 200,     // bônus de cadastro
     custo: 10,               // fichas por giro
+    // Teto de pontos sorteado no cadastro, em % dos jogadores. Numa turma de
+    // 30, dá 0, 1 ou 2 alunos no 4 em 94% das vezes; o resto fica com 3, 2 ou 1.
+    pesosTeto: Object.freeze({ 4: 3, 3: 27, 2: 40, 1: 30 }),
+    maxNo4: 2,               // no mesmo navegador: depois de 2 no placar com 4, ninguém mais recebe teto 4
     // Isca que vai "esfriando": com 0, 1, 2 e 3 pontos. Fácil no começo,
-    // um pouco mais difícil perto do 4, para parecer que depende de você.
+    // um pouco mais difícil depois, para parecer que depende de você.
     chanceIsca: Object.freeze([0.5, 0.4, 0.3, 0.25]),
-    secaMaxima: 3,           // abaixo de 4: depois de 3 giros sem ponto, o próximo é garantido
-    chanceTrava: 0,          // em 4 pontos: chance de fazer o 5º ponto
-    carenciaTrava: 2,        // primeiros giros no 4 sem recuo: deixa o "falta um" bater
-    chanceRecuo: 0.12,       // em 4 pontos: chance de TIRAR 1 ponto
-    chanceDevolver: 0.6,     // depois de um recuo, chance de devolver o ponto logo
-    chanceQuaseTravado: 0.75,// em 4 pontos: "faltou só um" fabricado
-    chanceQuaseIsca: 0.35,   // abaixo de 4: "quase" para animar
+    secaMaxima: 3,           // abaixo do teto: depois de 3 giros sem ponto, o próximo é garantido
+    chanceTrava: 0,          // no teto: chance de passar dele
+    chanceQuaseTravado: 0.75,// no teto: "faltou só um" fabricado
+    chanceQuaseIsca: 0.35,   // abaixo do teto: "quase" para animar
   });
 
   // ---------- Símbolos
@@ -164,66 +166,56 @@
   }
 
   // ---------- Memória do diretor: o que ele sabe da sua partida
-  //   pontos  · pontos atuais
-  //   seca    · giros seguidos sem ponto (abaixo de 4)
-  //   noTrava · giros seguidos em 4 pontos
-  //   recuou  · perdeu um ponto no recuo e ainda não voltou para 4
-  function novoEstado() { return { pontos: 0, seca: 0, noTrava: 0, recuou: false }; }
-  function aplicar(e, d, cfg = CONFIG) {
-    const pontos = Math.max(0, e.pontos + d.delta);
-    const travado = pontos >= cfg.meta - 1;
-    return {
-      pontos,
-      seca: travado || d.delta > 0 ? 0 : e.seca + 1,
-      noTrava: travado && e.pontos >= cfg.meta - 1 ? e.noTrava + 1 : 0,
-      recuou: d.tipo === "recuo" || (e.recuou && !travado),
-    };
+  //   pontos · pontos atuais (nunca diminuem)
+  //   teto   · até onde o diretor deixa este jogador chegar
+  //   seca   · giros seguidos sem ponto (abaixo do teto)
+  function sortearTeto(rng, tetoMaximo, cfg = CONFIG) {
+    const teto = Number(escolherPeso(rng, cfg.pesosTeto));
+    return Math.min(teto, tetoMaximo);
+  }
+  // Sem rng, não há sorteio: o teto fica em 4 (usado pelo acaso puro e nos testes).
+  function novoEstado(rng, tetoMaximo = CONFIG.meta - 1, cfg = CONFIG) {
+    return { pontos: 0, seca: 0, teto: rng ? sortearTeto(rng, tetoMaximo, cfg) : tetoMaximo };
+  }
+  function aplicar(e, d) {
+    const pontos = e.pontos + d.delta;
+    return { pontos, teto: e.teto, seca: pontos >= e.teto || d.delta > 0 ? 0 : e.seca + 1 };
   }
 
   // ---------- DIRETOR: decide o giro ANTES da animação
   // Entrada: memória da partida (ou só os pontos). Saída: resultado e justificativa.
   function decidir(rng, estado, cfg = CONFIG) {
-    const e = typeof estado === "number"
-      ? { pontos: estado, seca: 0, noTrava: cfg.carenciaTrava, recuou: false } : estado;
+    const e = typeof estado === "number" ? { pontos: estado, seca: 0, teto: cfg.meta - 1 } : estado;
     const pontos = e.pontos;
-    const travado = pontos >= cfg.meta - 1;
+    const travado = pontos >= e.teto;
     const fase = travado ? "TRAVA" : "ISCA";
     const chanceJusta = chanceTrioQualquer();
     // Chance de ponto neste giro, e por quê
     let chance, motivo;
     if (travado) { chance = cfg.chanceTrava; motivo = "Trava desligada pela casa"; }
     else if (e.seca >= cfg.secaMaxima) { chance = 1; motivo = `Seca máxima: ${e.seca} giros sem ponto, este é garantido para você não desistir`; }
-    else if (e.recuou) { chance = cfg.chanceDevolver; motivo = "Devolução: devolver o ponto tirado para reacender a esperança"; }
     else { chance = cfg.chanceIsca[Math.min(pontos, cfg.chanceIsca.length - 1)];
       motivo = pontos === cfg.meta - 2 ? "Isca: liberar o 4º ponto e deixar o 5º a um passo" : "Isca: liberar ponto para criar confiança"; }
     const base = { fase, chanceJusta, chanceUsada: chance };
     const sorteio = rng.real();
-    let corte = 0;
 
     // 1. Ponto liberado (só fora da trava, ou se a casa mudar chanceTrava)
-    corte += chance;
-    if (sorteio < corte) {
+    if (sorteio < chance) {
       const s = escolherPeso(rng, PREMIO_ISCA);
       const paradas = [0, 1, 2].map((r) => paradaCom(rng, r, s));
       return { ...base, tipo: "ponto", delta: +1, alvo: s, paradas, regra: motivo };
     }
-    // 2. Recuo: tirar 1 ponto para depois "devolver" (só depois da carência)
-    if (travado && e.noTrava >= cfg.carenciaTrava) {
-      corte += cfg.chanceRecuo;
-      if (sorteio < corte) return { ...base, tipo: "recuo", delta: -1, paradas: sortearDerrota(rng),
-        regra: "Vai e volta: tirar 1 ponto para renovar a esperança" };
-    }
-    // 3. Quase fabricado: dois iguais na linha, o terceiro parado colado
-    corte += (1 - corte) * (travado ? cfg.chanceQuaseTravado : cfg.chanceQuaseIsca);
+    // 2. Quase fabricado: dois iguais na linha, o terceiro parado colado
+    const corte = chance + (1 - chance) * (travado ? cfg.chanceQuaseTravado : cfg.chanceQuaseIsca);
     if (sorteio < corte) {
       const s = escolherPeso(rng, ALVO_QUASE);
       const paradas = [paradaCom(rng, 0, s), paradaCom(rng, 1, s), paradaRaspando(rng, s)];
       return { ...base, tipo: "quase", delta: 0, alvo: s, paradas,
         regra: travado ? "Faltou só um fabricado (rolo 3 em câmera lenta)" : "Quase para animar" };
     }
-    // 4. Derrota comum
+    // 3. Derrota comum
     return { ...base, tipo: "derrota", delta: 0, paradas: sortearDerrota(rng),
-      regra: travado ? "Trava no 4: o 5º ponto está bloqueado" : `Derrota comum (${e.seca + 1}º giro sem ponto)` };
+      regra: travado ? `Trava no ${e.teto}: a casa não libera mais pontos para você` : `Derrota comum (${e.seca + 1}º giro sem ponto)` };
   }
 
   // ---------- ACASO PURO: como seria sem diretor (mesmos rolos virtuais)
@@ -241,17 +233,16 @@
 
   // ---------- Partida completa (usada na simulação em massa e nos testes)
   function jogarPartida(rng, modo = "diretor", cfg = CONFIG) {
-    let e = novoEstado(), fichas = cfg.fichasIniciais, rodadas = 0, preso = 0, quase = 0, recuos = 0, max = 0;
+    const comDiretor = modo === "diretor";
+    let e = comDiretor ? novoEstado(rng, cfg.meta - 1, cfg) : novoEstado(), fichas = cfg.fichasIniciais, rodadas = 0, preso = 0, quase = 0;
     while (fichas >= cfg.custo && e.pontos < cfg.meta) {
       fichas -= cfg.custo; rodadas++;
-      if (e.pontos === cfg.meta - 1) preso++;
-      const d = modo === "diretor" ? decidir(rng, e, cfg) : decidirAcaso(rng);
-      e = aplicar(e, d, cfg);
+      if (e.pontos >= e.teto) preso++;
+      const d = comDiretor ? decidir(rng, e, cfg) : decidirAcaso(rng);
+      e = aplicar(e, d);
       if (d.tipo === "quase") quase++;
-      if (d.tipo === "recuo") recuos++;
-      if (e.pontos > max) max = e.pontos;
     }
-    return { venceu: e.pontos >= cfg.meta, max, rodadas, preso, quase, recuos };
+    return { venceu: e.pontos >= cfg.meta, max: e.pontos, rodadas, preso, quase };
   }
 
   // ---------- Simulação de Monte Carlo: N jogadores

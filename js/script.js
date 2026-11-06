@@ -14,16 +14,17 @@ const sorteioUI = M.criarRNG(); // só para falas e enfeites; nunca decide resul
 const falar = (lista) => (Array.isArray(lista) ? sorteioUI.escolher(lista) : lista);
 
 let st, cadastrado = false;
-function novo() {
-  st = { pts: 0, memoria: M.novoEstado(), fichas: C.fichasIniciais, rodadas: 0, preso: 0, near: 0, recuos: 0, gasto: 0,
-    hist: [0], log: [], girando: false, rng: M.criarRNG() };
+function novo(tetoMaximo) {
+  const rng = M.criarRNG();
+  st = { pts: 0, memoria: M.novoEstado(rng, tetoMaximo), fichas: C.fichasIniciais, rodadas: 0, preso: 0, near: 0, gasto: 0,
+    hist: [0], log: [], girando: false, rng };
 }
 
 /* ---------------------------------------------------------------
    Letreiro "A máquina diz": a voz da máquina, sem personagem
    (Manual de Marca: o dado é estático, sem rosto e sem animação)
    --------------------------------------------------------------- */
-// Tom do letreiro conforme o giro: ponto, quase, recuo, derrota, fim
+// Tom do letreiro conforme o giro: ponto, quase, derrota, fim
 function reagir(tom) { const l = document.querySelector(".letreiro"); if (l) l.dataset.tom = tom || ""; }
 function balao(txt) {
   const b = $("balao"); b.textContent = txt;
@@ -34,7 +35,6 @@ const FALAS = {
   chegou4: "Falta UM! Não vai parar agora, né?",
   quaseTrava: ["Passou raspando! O próximo vem!", "Foi por um fio! Tá esquentando!", "Quase! Ela tá quase pagando!", "Ahh! Mais um giro e sai!"],
   quaseIsca: ["Uh, quase!", "Por pouco!"],
-  recuo: ["Ih, azar! Você recupera rapidinho.", "Calma, foi só um pontinho."],
   derrotaTrava: ["Calma, a sorte vira.", "Só mais um giro.", "Já já sai, confia!", "Você já investiu tanto... continua!"],
   derrotaIsca: ["Gira de novo!", "Faz parte!", "Próximo!"],
   suspense: "Vai... vai... VAI!",
@@ -82,7 +82,7 @@ async function girar() {
   if (st.fichas < C.custo) { if ($("fim").hidden) fimDeJogo(); return; } // não repete o "uá uá" a cada Espaço
   st.girando = true;
   st.fichas -= C.custo; st.gasto += C.custo; st.rodadas++;
-  if (st.pts === META - 1) st.preso++;
+  if (st.pts >= st.memoria.teto) st.preso++;
   atualizar();
 
   // 1) O motor decide TUDO aqui, antes da animação.
@@ -116,11 +116,8 @@ async function girar() {
     reagir("ponto");
   } else if (d.tipo === "quase") {
     st.near++; S.quase(travado);
-    setMsg(travado ? "NÃÃÃO! Passou raspando! Falta só 1!" : "Quase! Faltou um símbolo.", "near");
+    setMsg(!travado ? "Quase! Faltou um símbolo." : st.pts === META - 1 ? "NÃÃÃO! Passou raspando! Falta só 1!" : "NÃÃÃO! Passou raspando!", "near");
     balao(falar(travado ? FALAS.quaseTrava : FALAS.quaseIsca)); reagir("quase");
-  } else if (d.tipo === "recuo") {
-    st.recuos++; S.recuo(); S.intensidade(false);
-    setMsg("Azar! A máquina tirou 1 ponto.", "bad"); balao(falar(FALAS.recuo)); reagir("recuo");
   } else {
     S.derrota(); setMsg("Não foi dessa vez.", "lose"); balao(falar(travado ? FALAS.derrotaTrava : FALAS.derrotaIsca));
     reagir("derrota");
@@ -136,10 +133,8 @@ function fimDeJogo() {
   setMsg("Acabaram suas fichas. Fim de jogo.", "bad");
   balao(FALAS.fim); reagir("fim");
   S.intensidade(false); S.pararMusica(); S.fim();
-  const chegou = Math.max(...st.hist) >= META - 1;
-  $("fimTxt").textContent = chegou
-    ? `Você girou ${st.rodadas} vezes, passou ${st.preso} rodadas preso no 4 e viu ${st.near} vezes o "faltou só um".`
-    : `Você girou ${st.rodadas} vezes e chegou a ${Math.max(...st.hist)} pontos.`;
+  const ptsTxt = st.pts === 1 ? "1 ponto" : `${st.pts} pontos`;
+  $("fimTxt").textContent = `Você girou ${st.rodadas} vezes, chegou a ${ptsTxt}, passou ${st.preso} rodadas na trava e viu ${st.near} vezes o "faltou só um".`;
   $("fim").hidden = false;
   atualizar();
 }
@@ -158,7 +153,7 @@ function atualizar() {
   $("girar").disabled = st.girando || semFichas;
   $("girar").textContent = semFichas && !st.girando ? "SEM FICHAS" : "GIRAR";
   $("sRod").textContent = st.rodadas; $("sPreso").textContent = st.preso; $("sNear").textContent = st.near;
-  $("sRecuo").textContent = st.recuos; $("sGasto").textContent = st.gasto;
+  $("sGasto").textContent = st.gasto;
   if (!$("p-algo").hidden) { desenhar(); mostrarLog(); }
 }
 
@@ -177,8 +172,9 @@ function desenhar() {
   const [g, w, h] = prepararCanvas($("grafico"));
   const L = 30, R = 14, T = 16, B = 24, H = st.hist, n = Math.max(H.length - 1, 1);
   const x = (i) => L + ((w - L - R) * i) / n, y = (v) => h - B - ((h - T - B) * v) / META;
-  // faixa da trava (4 a 5)
-  g.fillStyle = "#B8383214"; g.fillRect(L, y(META), w - L - R, y(META - 1) - y(META));
+  // faixa da trava (do teto do jogador até a meta)
+  const teto = cadastrado ? st.memoria.teto : META - 1;
+  g.fillStyle = "#B8383214"; g.fillRect(L, y(META), w - L - R, y(teto) - y(META));
   g.font = FONTE; g.lineWidth = 1;
   for (let v = 0; v <= META; v++) {
     g.strokeStyle = COR.linha; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(w - R, y(v)); g.stroke();
@@ -188,13 +184,12 @@ function desenhar() {
   g.strokeStyle = COR.vermelho; g.setLineDash([7, 5]); g.lineWidth = 2.5;
   g.beginPath(); g.moveTo(L, y(META)); g.lineTo(w - R, y(META)); g.stroke(); g.setLineDash([]);
   g.fillStyle = COR.vermelho; g.font = '900 12px Lato, Arial'; g.fillText("meta", w - R - 36, y(META) - 6);
-  g.fillText("zona da trava", L + 6, y(META - 1) - 6);
+  g.fillText("zona da trava", L + 6, y(teto) - 6);
   g.beginPath(); H.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))));
   g.strokeStyle = COR.preto; g.lineWidth = 3; g.lineJoin = "round"; g.stroke();
   st.log.forEach((e) => {
     const cx = x(e.n), cy = y(e.pts);
     if (e.tipo === "quase") { g.beginPath(); g.arc(cx, cy, 5, 0, 7); g.fillStyle = COR.ocre; g.fill(); g.lineWidth = 2; g.strokeStyle = COR.preto; g.stroke(); }
-    if (e.tipo === "recuo") { g.beginPath(); g.moveTo(cx - 6, cy - 14); g.lineTo(cx + 6, cy - 14); g.lineTo(cx, cy - 4); g.closePath(); g.fillStyle = COR.vermelho; g.fill(); }
   });
   g.beginPath(); g.arc(x(H.length - 1), y(H.at(-1)), 5, 0, 7); g.fillStyle = COR.preto; g.fill();
 }
@@ -220,14 +215,14 @@ function montarExplicacao() {
   linhas.push([svgSim("vazio"), colado, "Vazios colados no dado"]);
   $("pesos").innerHTML = `<small><b>Rolo 3:</b> casas de cada símbolo, em 64</small>` + linhas.map(([ic, p, nome]) =>
     `<div class="peso" title="${nome}">${ic}<span class="barra"><i style="width:${(p / 13) * 100}%"></i></span><b>${p}/64</b></div>`).join("");
+  const tetos = [4, 3, 2, 1];
   $("cfg").innerHTML = [
+    [`Teto sorteado no cadastro: ${tetos.join(", ")} pontos`, tetos.map((t) => C.pesosTeto[t] + "%").join(" · ")],
     ["Chance de ponto com 0, 1, 2 e 3 pontos", C.chanceIsca.map((x) => pct(x)).join(" · ")],
-    [`Ponto garantido depois de ${C.secaMaxima} giros sem ponto`, "100%"],
-    ["Chance do 5º ponto (em 4)", pct(C.chanceTrava)],
-    [`Chance de tirar 1 ponto (em 4, após ${C.carenciaTrava} giros)`, pct(C.chanceRecuo)],
-    ["Chance de devolver o ponto tirado", pct(C.chanceDevolver)],
-    ['"Faltou só um" em 4 (do que sobra)', pct(C.chanceQuaseTravado)],
-    ['"Quase" abaixo de 4 (do que sobra)', pct(C.chanceQuaseIsca)],
+    [`Ponto garantido depois de ${C.secaMaxima} giros sem ponto (abaixo do teto)`, "100%"],
+    ["Chance de passar do teto", pct(C.chanceTrava)],
+    ['"Faltou só um" no teto (do que sobra)', pct(C.chanceQuaseTravado)],
+    ['"Quase" abaixo do teto (do que sobra)', pct(C.chanceQuaseIsca)],
     ["Fichas iniciais / custo do giro", `${C.fichasIniciais} / ${C.custo}`],
   ].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
 }
@@ -254,7 +249,7 @@ async function rodarMC() {
   desenharMC();
   const f = (x) => x.toLocaleString("pt-BR"), d = res.diretor, a = res.acaso;
   $("mcNum").innerHTML = `
-    <div class="destaque"><small>SorteBets: venceram</small><b>${f(d.venc)} de ${f(n)}</b>${pct(d.chegou4 / n)} chegaram a 4 e ficaram presos ~${d.preso.toFixed(1).replace(".", ",")} giros</div>
+    <div class="destaque"><small>SorteBets: venceram</small><b>${f(d.venc)} de ${f(n)}</b>Só ${pct(d.chegou4 / n)} chegaram a 4. Em média, ~${d.preso.toFixed(1).replace(".", ",")} giros na trava</div>
     <div><small>Acaso puro: venceram</small><b>${f(a.venc)} de ${f(n)}</b>${pct(a.dist[0] / n)} terminaram com 0 pontos</div>
     <div><small>Pontos médios</small><b>${d.media.toFixed(2).replace(".", ",")} × ${a.media.toFixed(2).replace(".", ",")}</b>A diferença é a isca: pontos que o acaso não daria.</div>`;
 }
@@ -356,11 +351,14 @@ $("cadastro").onsubmit = (e) => {
   if (!nome) { $("nome").focus(); return; }
   S.iniciar(); // o navegador só libera o áudio depois de um toque/clique
   const primeiro = nome.split(/\s+/)[0];
-  novo(); st.id = Date.now(); st.nome = nome; cadastrado = true;
+  // Neste navegador, quando o placar já tem o máximo de jogadores no 4, o teto novo para em 3
+  const jaNo4 = carregar().filter((p) => p.max >= META - 1).length;
+  novo(jaNo4 >= C.maxNo4 ? META - 2 : META - 1); st.id = Date.now(); st.nome = nome; cadastrado = true;
   $("jogador").textContent = primeiro; $("jogador").title = nome; $("conta").hidden = false;
   $("t-jogar").classList.remove("locked");
   $("t-cadastro").hidden = true; $("alerta").hidden = true;
-  $("quem").textContent = `Resultados de ${nome}.`;
+  const t = st.memoria.teto;
+  $("quem").textContent = `Resultados de ${nome}. No cadastro, a máquina já sorteou o seu teto: ${t} ${t === 1 ? "ponto" : "pontos"}.`;
   setMsg(`Bem-vindo, ${primeiro}! Junte 5 pontos.`);
   balao(`E aí, ${primeiro}! Cinco pontos e a máquina é sua.`);
   atualizar(); registrar(); abrir("jogar"); $("girar").focus();
