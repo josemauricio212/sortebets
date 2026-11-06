@@ -316,6 +316,8 @@ async function enviar(j) {
     try {
       const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo, keepalive: true }); // termina mesmo se a aba fechar
       online = r.ok;
+      // O professor tirou este aluno do placar: para de mandar os giros dele
+      if (r.ok && (await r.json()).removido && st.id === JSON.parse(corpo).id) { st.removido = true; aEnviar = null; }
     } catch { online = false; }
   }
   enviando = false;
@@ -340,13 +342,13 @@ function registrar() {
   const j = { id: st.id, nome: st.nome, max: Math.max(...st.hist), rodadas: st.rodadas, preso: st.preso, near: st.near, gasto: st.gasto };
   const i = placar.findIndex((p) => p.id === st.id);
   if (i < 0) placar.push(j); else placar[i] = j;
-  salvar(); enviar(j); mostrarPlacar();
+  salvar(); if (!st.removido) enviar(j); mostrarPlacar();
 }
 // Lista exibida: a do banco (com o jogador deste aparelho sempre atualizado) ou a local
 function listaAtual() {
   if (!online) return placar;
   const l = placarOnline.filter((p) => !st || p.id !== st.id);
-  const eu = st && st.id && placar.find((p) => p.id === st.id);
+  const eu = st && st.id && !st.removido && placar.find((p) => p.id === st.id);
   return eu ? [...l, eu] : l;
 }
 function mostrarPlacar() {
@@ -436,8 +438,10 @@ document.querySelector(".tabs").addEventListener("keydown", (e) => {
 /* ---------------------------------------------------------------
    Cadastro: só o nome, que fica nesta página e no placar local
    --------------------------------------------------------------- */
-$("cadastro").onsubmit = (e) => {
+let cadastrando = false;
+$("cadastro").onsubmit = async (e) => {
   e.preventDefault();
+  if (cadastrando) return;
   const nome = $("nome").value.trim();
   $("nome").setAttribute("aria-invalid", !nome);
   if (!nome) { $("nome").focus(); return; }
@@ -446,7 +450,18 @@ $("cadastro").onsubmit = (e) => {
   // Quando o placar da turma (online, ou deste navegador se estiver offline) já tem
   // o máximo de jogadores no 4, o teto novo para em 3
   const jaNo4 = listaAtual().filter((p) => p.max >= META - 1).length;
-  novo(jaNo4 >= C.maxNo4 ? META - 2 : META - 1); st.id = novoId(); st.nome = nome; cadastrado = true;
+  novo(jaNo4 >= C.maxNo4 ? META - 2 : META - 1); st.id = novoId(); st.nome = nome;
+  // Sorteou teto 4? Online, quem decide a vaga é o servidor, de uma vez só para a turma
+  // inteira (dois cadastros no mesmo segundo não ganham a mesma vaga)
+  if (st.memoria.teto === META - 1 && PODE_ONLINE) {
+    cadastrando = true; $("cadastro").querySelector("button").disabled = true;
+    try {
+      const r = await fetch(API + "&vaga4=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: st.id, nome }) });
+      if (r.ok && !(await r.json()).vaga4) st.memoria = { ...st.memoria, teto: META - 2 };
+    } catch { /* sem conexão: vale a regra deste aparelho */ }
+    cadastrando = false; $("cadastro").querySelector("button").disabled = false;
+  }
+  cadastrado = true;
   $("jogador").textContent = primeiro; $("jogador").title = nome; $("conta").hidden = false;
   $("t-jogar").classList.remove("locked");
   $("t-cadastro").hidden = true; $("alerta").hidden = true;

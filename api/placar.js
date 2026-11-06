@@ -8,8 +8,9 @@
 
    GET    /api/placar?turma=3a            lista os jogadores da turma
    POST   /api/placar?turma=3a            grava/atualiza um jogador
+   POST   /api/placar?turma=3a&vaga4=1    pede uma das 2 vagas de teto 4 da turma
    DELETE /api/placar?turma=3a            limpa a turma (pede a senha),
-                                           ou só um jogador, se o corpo tiver "id"
+                                           ou remove só um jogador, se o corpo tiver "id"
 
    Variáveis de ambiente na Vercel:
      DATABASE_URL   criada sozinha ao conectar o banco Neon ao projeto
@@ -20,6 +21,7 @@ const { neon } = require("@neondatabase/serverless");
 
 const META = 5;
 const MAX_JOGADORES = 300;   // por turma, para ninguém lotar o banco
+const VAGAS_4 = 2;           // no máximo 2 jogadores por turma com teto 4 (como CONFIG.maxNo4)
 const DIAS = 14;             // jogadores somem 14 dias depois do último giro
 
 const URL_DB = process.env.DATABASE_URL || process.env.POSTGRES_URL;
@@ -40,6 +42,10 @@ function prepararBanco() {
       gasto      integer     NOT NULL DEFAULT 0,
       atualizado timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY (turma, id))`;
+    // teto4: o jogador ganhou uma das vagas de teto 4 da turma
+    // removido: o professor tirou do placar; os giros seguintes dele são ignorados
+    await sql`ALTER TABLE placar ADD COLUMN IF NOT EXISTS teto4 boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS removido boolean NOT NULL DEFAULT false`;
   })().catch((e) => { pronto = null; throw e; });
   return pronto;
 }
@@ -79,7 +85,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "GET") {
       const jogadores = await sql`SELECT id, nome, max, rodadas, preso, near, gasto FROM placar
-        WHERE turma = ${turma} AND atualizado > now() - make_interval(days => ${DIAS})`;
+        WHERE turma = ${turma} AND NOT removido AND atualizado > now() - make_interval(days => ${DIAS})`;
       return res.status(200).json({ turma, jogadores });
     }
 
@@ -88,13 +94,29 @@ module.exports = async function handler(req, res) {
       if (!j) return res.status(400).json({ erro: "Jogador inválido." });
       // De vez em quando, apaga quem não joga há mais de 14 dias
       if (Math.random() < 0.05) await sql`DELETE FROM placar WHERE atualizado < now() - make_interval(days => ${DIAS})`;
-      const [{ total, existe }] = await sql`SELECT count(*)::int AS total, bool_or(id = ${j.id}) AS existe
-        FROM placar WHERE turma = ${turma}`;
+
+      // Vaga de teto 4: trava a turma para dois cadastros simultâneos não pegarem a mesma vaga
+      if (req.query && req.query.vaga4) {
+        const [, ganhou] = await sql.transaction([
+          sql`SELECT pg_advisory_xact_lock(hashtext(${"placar:" + turma}))`,
+          sql`INSERT INTO placar (turma, id, nome, teto4)
+            SELECT ${turma}, ${j.id}, ${j.nome}, true
+            WHERE (SELECT count(*) FROM placar WHERE turma = ${turma} AND NOT removido AND (teto4 OR max >= ${META - 1})
+                     AND atualizado > now() - make_interval(days => ${DIAS})) < ${VAGAS_4}
+            ON CONFLICT (turma, id) DO NOTHING RETURNING id`,
+        ]);
+        return res.status(200).json({ ok: true, vaga4: ganhou.length > 0 });
+      }
+
+      const [{ total, existe, removido }] = await sql`SELECT count(*)::int AS total, bool_or(id = ${j.id}) AS existe,
+        bool_or(id = ${j.id} AND removido) AS removido FROM placar WHERE turma = ${turma}`;
+      if (removido) return res.status(200).json({ ok: true, removido: true });
       if (!existe && total >= MAX_JOGADORES) return res.status(409).json({ erro: "Placar da turma cheio. Peça ao professor para limpar." });
       await sql`INSERT INTO placar (turma, id, nome, max, rodadas, preso, near, gasto, atualizado)
         VALUES (${turma}, ${j.id}, ${j.nome}, ${j.max}, ${j.rodadas}, ${j.preso}, ${j.near}, ${j.gasto}, now())
         ON CONFLICT (turma, id) DO UPDATE SET nome = EXCLUDED.nome, max = EXCLUDED.max, rodadas = EXCLUDED.rodadas,
-          preso = EXCLUDED.preso, near = EXCLUDED.near, gasto = EXCLUDED.gasto, atualizado = now()`;
+          preso = EXCLUDED.preso, near = EXCLUDED.near, gasto = EXCLUDED.gasto, atualizado = now()
+        WHERE NOT placar.removido`;
       return res.status(200).json({ ok: true });
     }
 
@@ -103,7 +125,8 @@ module.exports = async function handler(req, res) {
       const { senha: enviada, id } = await corpo(req);
       if (!senha) return res.status(403).json({ erro: "Limpeza desativada: falta a variável PLACAR_SENHA na Vercel." });
       if (String(enviada || "") !== senha) return res.status(403).json({ erro: "Senha errada." });
-      if (id) await sql`DELETE FROM placar WHERE turma = ${turma} AND id = ${String(id)}`;
+      // Remover um: a linha fica marcada, para o aluno não voltar ao placar no próximo giro
+      if (id) await sql`UPDATE placar SET removido = true, atualizado = now() WHERE turma = ${turma} AND id = ${String(id)}`;
       else await sql`DELETE FROM placar WHERE turma = ${turma}`;
       return res.status(200).json({ ok: true });
     }
