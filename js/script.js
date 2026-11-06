@@ -79,7 +79,7 @@ function setMsg(t, c) { $("msg").textContent = t; $("msg").className = "msg " + 
    --------------------------------------------------------------- */
 async function girar() {
   if (!cadastrado || st.girando) return;
-  if (st.fichas < C.custo) { fimDeJogo(); return; }
+  if (st.fichas < C.custo) { if ($("fim").hidden) fimDeJogo(); return; } // não repete o "uá uá" a cada Espaço
   st.girando = true;
   st.fichas -= C.custo; st.gasto += C.custo; st.rodadas++;
   if (st.pts === META - 1) st.preso++;
@@ -261,7 +261,7 @@ async function rodarMC() {
 function desenharMC() {
   if (!mcDados) return;
   const [g, w, h] = prepararCanvas($("mcGraf"));
-  const L = 36, R = 10, T = 22, B = 30, n = mcDados.n, grupos = META + 1;
+  const L = 36, R = 10, T = 38, B = 30, n = mcDados.n, grupos = META + 1;
   const gw = (w - L - R) / grupos, bw = Math.min(gw * 0.36, 46);
   const y = (p) => h - B - (h - T - B) * p;
   g.font = FONTE;
@@ -283,7 +283,7 @@ function desenharMC() {
     });
     g.fillStyle = k === META ? COR.vermelho : COR.preto; g.textAlign = "center";
     g.font = '900 13px Lato, Arial';
-    g.fillText(k === META ? "5 (venceu)" : `${k} pts`, cx, h - 10); g.textAlign = "left"; g.font = FONTE;
+    g.fillText(k === META ? (gw >= 80 ? "5 (venceu)" : "5 pts") : `${k} pts`, cx, h - 10); /* celular: rótulo curto */ g.textAlign = "left"; g.font = FONTE;
   }
   g.fillStyle = COR.suave; g.fillText("pontos máximos de cada jogador", L, 12);
 }
@@ -332,7 +332,7 @@ function abrir(aba) {
   ABAS.forEach((a) => { $("t-" + a).setAttribute("aria-selected", a === aba); $("p-" + a).hidden = a !== aba; });
   document.body.dataset.aba = aba;
   scrollTo({ top: 0 });
-  if (aba === "jogar") ["r0", "r1", "r2"].forEach((_, r) => mostrarParado(r));
+  if (aba === "jogar" && !st.girando) [0, 1, 2].forEach(mostrarParado); // não interrompe um giro em andamento
   if (aba === "algo") { desenhar(); mostrarLog(); desenharMC(); }
   if (aba === "placar") { fecharConfirma(); mostrarPlacar(); }
   musicaConformeTela();

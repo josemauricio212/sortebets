@@ -172,7 +172,7 @@
 
       <div class="card">
         <h3>Seus pontos, giro a giro</h3>
-        <canvas id="grafico" aria-label="Gráfico dos pontos ao longo das rodadas"></canvas>
+        <canvas id="grafico" role="img" aria-label="Gráfico dos pontos ao longo das rodadas"></canvas>
         <ul class="legenda">
           <li><i class="lg-linha"></i>Seus pontos</li>
           <li><i class="lg-meta"></i>Meta de 5 (bloqueada)</li>
@@ -231,7 +231,7 @@
           <button class="cta pequeno" id="mcRodar" type="button">Rodar simulação</button>
         </div>
         <div id="mcRes" hidden>
-          <canvas id="mcGraf" aria-label="Gráfico da distribuição de pontos máximos nas duas máquinas"></canvas>
+          <canvas id="mcGraf" role="img" aria-label="Gráfico da distribuição de pontos máximos nas duas máquinas"></canvas>
           <ul class="legenda"><li><i class="lg-dir"></i>SorteBets (com diretor)</li><li><i class="lg-aca"></i>Acaso puro (mesmos rolos)</li></ul>
           <div class="mc-num" id="mcNum"></div>
         </div>
@@ -244,8 +244,8 @@
   const sorteio = rng.real();                       // número entre 0 e 1
 
   let chance = [0.50, 0.40, 0.30, 0.25][partida.pontos]; // ISCA que esfria
-  if (partida.seca &gt;= 3) chance = 1;              // SECA MÁXIMA: ponto garantido
   if (partida.recuou)    chance = 0.60;             // DEVOLUÇÃO do ponto tirado
+  if (partida.seca &gt;= 3) chance = 1;              // SECA MÁXIMA: ponto garantido
   if (travado)           chance = 0;                // TRAVA: o 5º nunca vem
 
   if (sorteio &lt; chance) return ponto();            // libera o trio
