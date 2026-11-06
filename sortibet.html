@@ -158,14 +158,13 @@
 
       <div class="stats">
         <div class="stat"><small>Rodadas jogadas</small><b id="sRod">0</b></div>
-        <div class="stat"><small>Rodadas presas no 4</small><b id="sPreso">0</b></div>
+        <div class="stat"><small>Rodadas na trava</small><b id="sPreso">0</b></div>
         <div class="stat"><small>"Faltou só um" fabricados</small><b id="sNear">0</b></div>
-        <div class="stat"><small>Pontos tirados</small><b id="sRecuo">0</b></div>
         <div class="stat"><small>Fichas gastas</small><b id="sGasto">0</b></div>
       </div>
 
       <div class="chances">
-        <div class="chance zero"><small>Sua chance real de fazer o 5º ponto</small><b>0%</b><span>Em 4 pontos, o diretor bloqueia o trio. Sempre.</span></div>
+        <div class="chance zero"><small>Sua chance real de fazer o 5º ponto</small><b>0%</b><span>O diretor sorteia um teto no cadastro, e ele nunca passa de 4. Sempre.</span></div>
         <div class="chance"><small>Chance de trio no acaso puro, por giro</small><b id="pAcaso">0,38%</b><span>Com os mesmos rolos, sem o diretor.</span></div>
         <div class="chance"><small>Chance que a máquina te deu no começo</small><b id="pIsca">50%</b><span id="pIscaTxt">Cerca de 130 vezes o acaso. É a isca.</span></div>
       </div>
@@ -177,7 +176,6 @@
           <li><i class="lg-linha"></i>Seus pontos</li>
           <li><i class="lg-meta"></i>Meta de 5 (bloqueada)</li>
           <li><i class="lg-quase"></i>"Faltou só um"</li>
-          <li><i class="lg-recuo"></i>Ponto tirado</li>
         </ul>
       </div>
 
@@ -213,10 +211,10 @@
 
       <ol class="truques">
         <li><strong>Começo fácil.</strong> No primeiro ponto, 1 em cada 2 giros paga. No acaso puro seria menos de 1 em 250. A chance vai caindo a cada ponto (50%, 40%, 30%, 25%) para parecer que ficou difícil por mérito seu.</li>
-        <li><strong>Seca máxima.</strong> Abaixo de 4, a máquina nunca deixa você passar mais de 3 giros sem ponto: o 4º é garantido. Assim ninguém desanima antes de chegar na trava. Resultado: todo mundo chega a 4.</li>
-        <li><strong>Trava no 4.</strong> Em 4 pontos, a chance do último trio vira <code>0%</code>. Não importa quantas fichas você tenha.</li>
-        <li><strong>"Faltou só um" fabricado.</strong> Travado no 4, a maioria dos giros põe dois símbolos na linha e o terceiro parado logo acima ou abaixo. O último rolo gira mais devagar para criar suspense.</li>
-        <li><strong>Vai e volta.</strong> Depois de 2 giros no 4 (para o "falta um" bater), de vez em quando a máquina tira um ponto. E logo devolve: 60% de chance no giro seguinte. Cair para 3 e voltar para 4 renova a esperança e mantém você jogando.</li>
+        <li><strong>Seca máxima.</strong> Abaixo do seu teto, a máquina nunca deixa você passar mais de 3 giros sem ponto: o 4º é garantido. Assim ninguém desanima antes de chegar na trava.</li>
+        <li><strong>Teto sorteado no cadastro.</strong> Antes do primeiro giro, a máquina já decidiu até onde você vai: 4 pontos para só 3% dos jogadores; os outros param em 3, 2 ou 1. Quem foi mais longe não jogou melhor: só recebeu um teto maior.</li>
+        <li><strong>Trava no teto.</strong> Ao chegar no seu teto, a chance de ponto vira <code>0%</code>. Não importa quantas fichas você tenha.</li>
+        <li><strong>"Faltou só um" fabricado.</strong> Na trava, a maioria dos giros põe dois símbolos na linha e o terceiro parado logo acima ou abaixo. O último rolo gira mais devagar para criar suspense.</li>
         <li><strong>Tudo decidido no clique.</strong> O resultado sai de <code>Motor.decidir()</code> antes de os rolos girarem. A animação só obedece.</li>
         <li><strong>Sons que comemoram.</strong> A máquina toca fanfarra, moedas e prato no ponto, e faz festa até no "quase". Quando você perde, quase não faz barulho. E quando você chega no 4, a música acelera e ganha trompete. Perder fica silencioso; quase ganhar parece ganhar.</li>
         <li><strong>Cadastro com bônus.</strong> Você entregou seu nome em troca de "fichas grátis". Os sites de aposta fazem igual, pedindo ainda e-mail, CPF e telefone: o bônus é a isca e seus dados viram propaganda para você voltar.</li>
@@ -240,20 +238,17 @@
       <details class="card codigo">
         <summary>Ver o código do diretor</summary>
 <pre><code>function decidir(rng, partida) {
-  const travado = partida.pontos &gt;= META - 1;     // 4 pontos?
+  // partida.teto foi sorteado no cadastro: 4, 3, 2 ou 1
+  const travado = partida.pontos &gt;= partida.teto;  // chegou no teto?
   const sorteio = rng.real();                       // número entre 0 e 1
 
   let chance = [0.50, 0.40, 0.30, 0.25][partida.pontos]; // ISCA que esfria
-  if (partida.recuou)    chance = 0.60;             // DEVOLUÇÃO do ponto tirado
   if (partida.seca &gt;= 3) chance = 1;              // SECA MÁXIMA: ponto garantido
-  if (travado)           chance = 0;                // TRAVA: o 5º nunca vem
+  if (travado)           chance = 0;                // TRAVA: daqui não passa
 
   if (sorteio &lt; chance) return ponto();            // libera o trio
 
-  if (travado &amp;&amp; partida.giros_no_4 &gt;= 2 &amp;&amp; sorteio &lt; 0.12)
-    return tirarUmPonto();                          // VAI E VOLTA
-
-  if (sorteio &lt; (travado ? 0.78 : ...))            // QUASE FABRICADO
+  if (sorteio &lt; (travado ? 0.75 : ...))            // QUASE FABRICADO
     return doisNaLinha_terceiroRaspando();
 
   return derrota();
@@ -283,7 +278,7 @@
       <div class="tabela-wrap" id="tabela">
         <table class="tabela">
           <thead>
-            <tr><th>#</th><th>Nome</th><th>Pontos máx.</th><th>Rodadas</th><th>Presas no 4</th><th>"Faltou só um"</th><th>Fichas gastas</th></tr>
+            <tr><th>#</th><th>Nome</th><th>Pontos máx.</th><th>Rodadas</th><th>Na trava</th><th>"Faltou só um"</th><th>Fichas gastas</th></tr>
           </thead>
           <tbody id="lista"></tbody>
         </table>

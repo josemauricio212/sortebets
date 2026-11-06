@@ -32,7 +32,7 @@ Linguagem usada: HTML + CSS + JavaScript, cada um em seu lugar:
   │   ├── logo-dados.js   logo embutido para o cartaz
   │   └── qrcode.js       biblioteca que monta o QR code (qrcode-generator, MIT)
   └── testes/
-      └── teste-motor.js  13 testes do algoritmo (rodar: node testes/teste-motor.js)
+      └── teste-motor.js  testes do algoritmo (rodar: node testes/teste-motor.js)
 
 Não precisa de internet: as fontes do Manual de Marca (DejaVu Serif
 Condensed Bold Italic nos títulos e Lato nos textos) estão embutidas
@@ -58,15 +58,18 @@ QR CODE PARA OS ALUNOS ABRIREM NO CELULAR
 PLACAR DA TURMA
 ==================================================
 - Cada jogador entra no placar com: nome, pontos máximos, rodadas,
-  rodadas presas no 4, vezes que apareceu "faltou só um" e fichas gastas.
+  rodadas na trava, vezes que apareceu "faltou só um" e fichas gastas.
 - PLACAR ONLINE: no site publicado, o placar é o mesmo em todos os
   celulares e computadores. Vários alunos jogam ao mesmo tempo e o
   placar do projetor se atualiza sozinho (a cada 4 segundos).
 - Separar turmas: acrescente ?turma=NOME no fim do link. Exemplo:
   https://sortibet777.vercel.app/?turma=3a
   Cada turma tem o seu placar. Gere o QR code já com esse link.
+- No máximo 2 alunos por turma recebem teto 4: depois de 2 no placar
+  com 4 pontos, os próximos param em 3 ou menos.
 - O placar de uma turma some sozinho 14 dias depois do último jogo.
-- "Limpar placar" no site publicado pede a senha do professor.
+- "Limpar placar" no site publicado pede a senha do professor. Isso
+  também libera de novo as 2 vagas de 4 pontos da turma.
 - Aberto direto do arquivo (sem internet), o placar volta a ser só
   daquele navegador, como antes.
 
@@ -115,25 +118,28 @@ CAMADA 2 · O DIRETOR (decide antes da animação)
 1. COMEÇO FÁCIL (ISCA QUE ESFRIA): a chance de ponto começa em 50%
    (cerca de 130 vezes o acaso) e cai a cada ponto: 50%, 40%, 30%, 25%.
    O aluno sobe rápido e sente que ficou difícil "por mérito".
-   SECA MÁXIMA: abaixo de 4, nunca passa de 3 giros sem ponto; o 4º
-   giro é garantido. Assim TODO aluno chega a 4 antes de desanimar.
-2. TRAVA NO 4: em 4 pontos, a chance do 5º ponto é ZERO. Sempre.
-3. "FALTOU SÓ UM" FABRICADO: travado no 4, cerca de 2 em cada 3 giros
-   param dois símbolos na linha e o terceiro logo acima ou abaixo dela.
+   SECA MÁXIMA: abaixo do teto, nunca passa de 3 giros sem ponto; o 4º
+   giro é garantido. Assim TODO aluno chega ao seu teto antes de desanimar.
+2. TETO SORTEADO NO CADASTRO: antes do primeiro giro, a máquina já
+   decidiu até onde o aluno vai: 4 pontos (3%), 3 (27%), 2 (40%) ou 1 (30%).
+   Ninguém termina com 0 e ninguém perde ponto. Em uma turma de 30,
+   ficam 0, 1 ou 2 alunos no 4 em cerca de 94% das vezes. Como cada
+   celular joga sozinho, esse número é uma chance, não uma garantia.
+   Em um mesmo navegador é garantia: com 2 alunos com 4 no placar,
+   nenhum outro recebe teto 4.
+3. TRAVA NO TETO: ao chegar no teto, a chance de ponto é ZERO. Sempre.
+4. "FALTOU SÓ UM" FABRICADO: na trava, 3 em cada 4 giros param dois
+   símbolos na linha e o terceiro logo acima ou abaixo dela.
    O último rolo gira mais devagar para criar suspense.
-4. VAI E VOLTA: depois de 2 giros no 4 (carência, para o "falta um"
-   bater), 12% dos giros tiram 1 ponto. E a máquina devolve rápido:
-   60% de chance no giro seguinte. Cair para 3 e voltar para 4 renova
-   a esperança.
 5. RESULTADO DECIDIDO NO CLIQUE: o diretor escolhe o resultado e depois
    procura nos rolos uma parada REAL que mostre aquilo. A animação só
    obedece.
 6. CADASTRO COM BÔNUS: o aluno entregou o nome em troca de "fichas
    grátis". (No SorteBets o nome só vai para o placar da turma.)
 
-O diretor tem MEMÓRIA da partida: pontos, giros seguidos sem ponto,
-giros presos no 4 e se acabou de tirar um ponto. Cada giro no registro
-mostra a regra aplicada e a chance real naquele momento.
+O diretor tem MEMÓRIA da partida: pontos, teto e giros seguidos sem
+ponto. Cada giro no registro mostra a regra aplicada e a chance real
+naquele momento.
 
 OS SONS (js/som.js) TAMBÉM SÃO UM TRUQUE
 - Música de ragtime dos anos 1930, com chiado de disco, criada pelo
@@ -142,26 +148,27 @@ OS SONS (js/som.js) TAMBÉM SÃO UM TRUQUE
 - "Quase": apito caindo e metais escorregando, parece festa.
 - Derrota: quase silêncio. Perder não pode chamar atenção.
 - Preso no 4: a música acelera e ganha trompete e chimbal.
-- Ponto tirado e fim das fichas: trombone triste.
+- Fim das fichas: trombone triste.
 
 O LETREIRO "A MÁQUINA DIZ" FALA A CADA GIRO
 - frases de incentivo que imitam os sites de aposta ("Só mais um giro",
   "Você já investiu tanto... continua!")
-- a borda muda de cor no ponto, no "quase", no ponto tirado e no fim
+- a borda muda de cor no ponto, no "quase" e no fim
 - sem mascote: pelo Manual de Marca, o dado é estático e sem personagem
 
 Todos esses números ficam no objeto CONFIG, no começo de js/motor.js.
 
 A ABA ALGORITMO MOSTRA
 - os números da partida do aluno e a chance real (0%) do 5º ponto;
-- o gráfico dos pontos, com cada "faltou só um" e cada ponto tirado;
+- o teto sorteado para o aluno no cadastro;
+- o gráfico dos pontos, com cada "faltou só um";
 - o REGISTRO DO DIRETOR: giro a giro, a regra aplicada e a chance real;
 - os pesos dos rolos virtuais e a configuração do diretor;
 - TESTE COM MIL JOGADORES: o computador joga 1.000 (ou até 100.000)
   partidas com o diretor e com o acaso puro e compara em um gráfico.
-  Resultado típico: com o diretor, 100% chegam a 4 pontos, ficam
-  presos uns 10 giros e ninguém vence; no acaso puro, cerca de 93%
-  terminam com zero pontos.
+  Resultado típico: com o diretor, só 3% chegam a 4 pontos, todos
+  fazem pelo menos 1, ninguém vence e a maioria dos giros é na trava;
+  no acaso puro, cerca de 93% terminam com zero pontos.
   Os pontos a mais são a isca.
 
 ==================================================
@@ -170,11 +177,12 @@ SUGESTÃO DE ROTEIRO PARA A APRESENTAÇÃO
 1. Palestra educativa (curta): o que são bets e caça-níqueis on-line.
 2. Chamem alguns alunos para jogar o Sortibet. Deixem a turma torcer.
    Desafio: "Quem conseguir 5 pontos vence a máquina!"
-3. Esperem o momento em que alguém fica preso no 4 e grita
-   "faltou só um!". Esse é o ponto alto.
+3. Esperem o momento em que alguém trava e grita "faltou só um!" ao
+   ver dois símbolos na linha. Esse é o ponto alto. Quem chegar a 4
+   (quase ninguém) vira o centro das atenções da turma.
 4. Cliquem na aba "Algoritmo" (ou no botão "Ver como o algoritmo
    funciona" que aparece quando as fichas acabam). Ela mostra:
-   - quantas rodadas o aluno passou preso no 4;
+   - qual teto a máquina sorteou e quantas rodadas o aluno passou nele;
    - quantos "faltou só um" a máquina fabricou;
    - quantas fichas foram gastas;
    - um gráfico com os pontos sempre abaixo da linha da meta;

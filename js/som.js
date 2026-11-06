@@ -166,11 +166,6 @@
       if (!pronto()) return; const t = agora();
       bloco(t, 600, 0.025); bloco(t + 0.09, 500, 0.02);
     },
-    recuo() { // trombone triste curtinho
-      if (!pronto()) return; const t = agora();
-      [58, 57].forEach((m, i) => metal(m - 12, t + i * 0.28, 0.26, 0.09));
-      metal(56 - 12, t + 0.56, 0.6, 0.09, { vibrato: 25, desliza: -1 });
-    },
     fim() { // "uá uá uá uááá" + a música para
       if (!pronto()) return; const t = agora() + 0.1;
       [58, 57, 56].forEach((m, i) => metal(m - 12, t + i * 0.42, 0.38, 0.1));
