@@ -486,6 +486,10 @@ $("musica").onclick = () => {
   musicaConformeTela();
 };
 document.addEventListener("visibilitychange", musicaConformeTela);
+// No Safari iOS, a página pode ser retomada pelo cache de navegação.
+// Interrompemos o áudio ao sair e o sincronizamos ao retornar.
+addEventListener("pagehide", () => S.pararMusica());
+addEventListener("pageshow", musicaConformeTela);
 // Próximo jogador no mesmo aparelho: volta ao cadastro, o anterior fica no placar
 $("novoJogador").onclick = () => {
   novo(); st.rng = null; cadastrado = false; S.intensidade(false); reagir();

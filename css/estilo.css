@@ -409,3 +409,42 @@ footer small{color:var(--suave)}
 .tabela tr:hover .rm-btn,.rm-btn:focus-visible{opacity:1;border-color:var(--fio)}
 .rm-btn:hover{color:var(--vermelho);border-color:var(--vermelho)}
 @media (max-width:640px){.tabela .rm{display:none}}
+
+/* =====================================================================
+   iOS/iPadOS Safari — áreas seguras e controles touch responsivos.
+   Preserva a identidade art déco do projeto educativo SorteBets.
+   ===================================================================== */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { min-height: 100vh; min-height: 100dvh; }
+.topbar { padding-top: env(safe-area-inset-top, 0px); }
+.bar, .wrap {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+footer {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: max(36px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+}
+button { touch-action: manipulation; }
+.campo input { -webkit-appearance: none; appearance: none; }
+.tabs, .tab { min-width: 0; }
+.tabela-wrap { -webkit-overflow-scrolling: touch; }
+@media (max-width: 600px) {
+  .hero, .hero-txt, .hero-lado, .jogo, .coluna, .machine, .form { min-width: 0; }
+  .form { max-width: 100%; }
+  .tabs { gap: 2px; }
+  .tab { min-height: 44px; }
+}
+@media (max-width: 390px) {
+  .tab { padding-left: 2px; padding-right: 2px; font-size: 10px; letter-spacing: 0; }
+  .logo-grande { width: 135px; }
+  .hero h1 { font-size: 30px; }
+  .machine { padding-left: 10px; padding-right: 10px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .topbar { position: static; }
+}
+@supports (-webkit-touch-callout: none) {
+  body[data-aba="jogar"] { background-attachment: scroll; }
+}
